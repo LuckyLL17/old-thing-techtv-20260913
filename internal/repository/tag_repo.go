@@ -2,8 +2,8 @@ package repository
 
 import (
 	"upcycle-hub/internal/domain"
-	"upcycle-hub/pkg/utils"
 	apperr "upcycle-hub/pkg/errors"
+	"upcycle-hub/pkg/utils"
 
 	"gorm.io/gorm"
 )
@@ -19,6 +19,10 @@ func NewTagRepo(db *gorm.DB) *TagRepo {
 func (r *TagRepo) Create(t *domain.Tag) error {
 	if t.Slug == "" {
 		t.Slug = utils.Slugify(t.Name)
+	}
+	if t.Slug == "" {
+		// Slugify 会剥离中文等非 ASCII 字符，空 slug 会破坏唯一索引，回退为随机短串
+		t.Slug = "tag-" + utils.RandomHex(4)
 	}
 	err := r.db.Create(t).Error
 	if err != nil {

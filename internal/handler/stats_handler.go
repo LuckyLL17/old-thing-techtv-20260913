@@ -3,7 +3,6 @@ package handler
 import (
 	"strconv"
 	"upcycle-hub/api/dto"
-	"upcycle-hub/internal/domain"
 	"upcycle-hub/internal/middleware"
 	"upcycle-hub/internal/service"
 	apperr "upcycle-hub/pkg/errors"
@@ -184,8 +183,4 @@ func (h *StatsHandler) Attempts(c *gin.Context) {
 		return
 	}
 	PageOK(c, list, total, p.Page, p.Size)
-}
-
-func (h *StatsHandler) UserPublishedTutorials(c *gin.Context) {
-	_ = domain.UserLevelNovice
 }

@@ -95,3 +95,21 @@ textarea{min-height:120px;resize:vertical}
 .pagination{display:flex;justify-content:center;gap:8px;margin:40px 0 20px}
 .page-btn{min-width:36px;height:36px;border-radius:8px;border:1px solid #dde0e6;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px}
 .page-btn-active{background:#7c5cff;color:#fff;border-color:#7c5cff}
+.profile-hero{display:flex;gap:28px;align-items:flex-start;padding:32px;flex-wrap:wrap}
+.profile-avatar-lg{width:110px;height:110px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,#7c5cff,#3bc9db);box-shadow:0 6px 20px rgba(124,92,255,.25)}
+.profile-avatar-lg img{width:100%;height:100%;object-fit:cover}
+.profile-avatar-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:42px;font-weight:700}
+.profile-sub{color:#999;font-size:13px;margin-top:4px}
+.profile-bio{color:#555;margin-top:12px;font-size:14px;white-space:pre-wrap;word-break:break-word}
+.profile-specialty{display:inline-block;padding:4px 12px;background:#f0edff;color:#7c5cff;border-radius:999px;font-size:12px;margin:2px}
+.profile-counts{display:flex;gap:28px;margin-top:16px}
+.profile-counts div{display:flex;flex-direction:column;align-items:center;min-width:48px}
+.profile-counts b{font-size:22px;font-weight:800;color:#333}
+.profile-counts span{font-size:12px;color:#999;margin-top:2px}
+.profile-actions{display:flex;flex-direction:column;gap:10px;margin-left:auto}
+.level-badge{font-size:12px;font-weight:600;padding:3px 12px;border-radius:999px;vertical-align:middle;margin-left:6px}
+.level-novice{background:#f1f3f5;color:#868e96}
+.level-apprentice{background:#e7f5ff;color:#1c7ed6}
+.level-craftsman{background:#fff0e6;color:#e8590c}
+.level-master{background:linear-gradient(135deg,#ffd43b,#fa5252);color:#fff}
+@media(max-width:640px){.profile-hero{padding:22px;gap:18px}.profile-avatar-lg{width:80px;height:80px}.profile-avatar-fallback{font-size:30px}.profile-counts{gap:18px}.profile-actions{margin-left:0;flex-direction:row;width:100%}.profile-actions .btn{flex:1}}

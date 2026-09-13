@@ -54,7 +54,7 @@ func (s *AuthService) Register(username, email, password string) (*domain.User, 
 		PasswordHash: string(hash),
 		Nickname:     username,
 		Level:        domain.UserLevelNovice,
-		Status:       1,
+		Status:       domain.UserStatusActive,
 	}
 	u.ComputeLevel()
 	if err := s.userRepo.Create(u); err != nil {
@@ -74,7 +74,7 @@ func (s *AuthService) Login(account, password string) (*domain.User, string, err
 	if err != nil {
 		return nil, "", err
 	}
-	if u.Status != 1 {
+	if u.Status != domain.UserStatusActive {
 		return nil, "", apperr.New(apperr.CodeForbidden, "账户已被禁用")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {

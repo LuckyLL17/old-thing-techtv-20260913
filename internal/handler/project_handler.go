@@ -180,14 +180,19 @@ func (h *ProjectHandler) AddProjectUnderTutorial(c *gin.Context) {
 		Fail(c, apperr.ErrBadRequest)
 		return
 	}
-	var req dto.ProjectCreateReq
+	var req struct {
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		Images      string `json:"images"`
+		CustomNotes string `json:"custom_notes"`
+		Rating      int    `json:"rating"`
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		Fail(c, apperr.Wrap(apperr.CodeValidation, "参数错误", err))
 		return
 	}
-	req.TutorialID = tid
 	r := &service.ProjectCreateReq{
-		UserID: uid, TutorialID: req.TutorialID, Title: req.Title,
+		UserID: uid, TutorialID: tid, Title: req.Title,
 		Description: req.Description, Images: req.Images, CustomNotes: req.CustomNotes, Rating: req.Rating,
 	}
 	p, err := h.projectSvc.Create(r)

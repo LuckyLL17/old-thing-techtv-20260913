@@ -25,14 +25,14 @@ func NewStatsService(tr *repository.TutorialRepo, pr *repository.ProjectRepo, ur
 }
 
 type DashboardStats struct {
-	TutorialCount   int64              `json:"tutorial_count"`
-	ProjectCount    int64              `json:"project_count"`
-	UserCount       int64              `json:"user_count"`
-	TopTutorials    []*domain.Tutorial `json:"top_tutorials"`
-	TopUsers        []*domain.User     `json:"top_users"`
-	CategoryStats   map[string]int64   `json:"category_stats"`
-	MonthlyTrend    []int64            `json:"monthly_trend"`
-	PublishedCount  int64              `json:"published_count"`
+	TutorialCount  int64              `json:"tutorial_count"`
+	ProjectCount   int64              `json:"project_count"`
+	UserCount      int64              `json:"user_count"`
+	TopTutorials   []*domain.Tutorial `json:"top_tutorials"`
+	TopUsers       []*PublicUser      `json:"top_users"`
+	CategoryStats  map[string]int64   `json:"category_stats"`
+	MonthlyTrend   []int64            `json:"monthly_trend"`
+	PublishedCount int64              `json:"published_count"`
 }
 
 func (s *StatsService) Dashboard() (*DashboardStats, error) {
@@ -58,9 +58,16 @@ func (s *StatsService) Dashboard() (*DashboardStats, error) {
 	if err != nil {
 		return nil, err
 	}
-	st.TopUsers, err = s.userRepo.TopUsers(10)
+	topUsers, err := s.userRepo.TopUsers(10)
 	if err != nil {
 		return nil, err
+	}
+	st.TopUsers = make([]*PublicUser, 0, len(topUsers))
+	for _, u := range topUsers {
+		if u.Status != domain.UserStatusActive {
+			continue
+		}
+		st.TopUsers = append(st.TopUsers, toPublicUser(u))
 	}
 	byCat, err := s.tutorialRepo.CountByCategory()
 	if err == nil {

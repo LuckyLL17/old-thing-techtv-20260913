@@ -51,6 +51,15 @@ function difficultyBadge(d) {
 function levelLabel(l) {
   return { novice: '新手', apprentice: '学徒', craftsman: '匠人', master: '大师' }[l] || '新手';
 }
+function userLink(u, style = 'font-size:13px;color:#666') {
+  if (!u || !u.id) return `<span style="${style}">匿名</span>`;
+  return `<a href="#/users/${u.id}" style="${style}" onclick="event.stopPropagation()">${u.nickname || u.username || '匿名'}</a>`;
+}
+function avatarLink(u) {
+  const av = avatarFor(u);
+  if (!u || !u.id) return av;
+  return `<a href="#/users/${u.id}" onclick="event.stopPropagation()">${av}</a>`;
+}
 function stars(n) {
   let s = '';
   for (let i = 0; i < 5; i++) s += i < (n|0) ? '★' : '☆';
@@ -134,7 +143,7 @@ function renderTutorialCards(list) {
   return list.map(t => {
     const user = t.user || {};
     const cat = t.category || {};
-    return `<div class="card" onclick="location.hash='#/tutorials/${t.id}'"><div class="before-after"><img src="${t.cover_before||'https://picsum.photos/seed/b'+t.id+'/400'}" onerror="this.src='https://picsum.photos/seed/b'+${t.id}+'/400'" alt="改造前"><img src="${t.cover_after||'https://picsum.photos/seed/a'+t.id+'/400'}" onerror="this.src='https://picsum.photos/seed/a'+${t.id}+'/400'" alt="改造后"></div><div class="meta"><span>👁 ${t.view_count}</span><span>❤️ ${t.favorite_count}</span><span>🛠 ${t.attempt_count}</span><span>${(t.tags||[]).slice(0,2).map(x=>`<span class="tag">#${x.name}</span>`).join('')}</span></div><div class="card-body"><div class="card-title">${t.title}</div><div class="flex" style="justify-content:space-between;margin-top:8px"><div class="flex">${avatarFor(user)}<span style="font-size:13px;color:#666">${user.nickname||user.username||'匿名'}</span></div><div style="font-size:12px">${difficultyBadge(t.difficulty)} · ${t.estimated_hours}h</div></div></div></div>`;
+    return `<div class="card" onclick="location.hash='#/tutorials/${t.id}'"><div class="before-after"><img src="${t.cover_before||'https://picsum.photos/seed/b'+t.id+'/400'}" onerror="this.src='https://picsum.photos/seed/b'+${t.id}+'/400'" alt="改造前"><img src="${t.cover_after||'https://picsum.photos/seed/a'+t.id+'/400'}" onerror="this.src='https://picsum.photos/seed/a'+${t.id}+'/400'" alt="改造后"></div><div class="meta"><span>👁 ${t.view_count}</span><span>❤️ ${t.favorite_count}</span><span>🛠 ${t.attempt_count}</span><span>${(t.tags||[]).slice(0,2).map(x=>`<span class="tag">#${x.name}</span>`).join('')}</span></div><div class="card-body"><div class="card-title">${t.title}</div><div class="flex" style="justify-content:space-between;margin-top:8px"><div class="flex">${avatarLink(user)}${userLink(user)}</div><div style="font-size:12px">${difficultyBadge(t.difficulty)} · ${t.estimated_hours}h</div></div></div></div>`;
   }).join('');
 }
 function renderProjectCards(list) {
@@ -143,7 +152,7 @@ function renderProjectCards(list) {
     const user = p.user || {};
     const tut = p.tutorial || {};
     const img = (p.images || '').split(/[|,;]/)[0] || `https://picsum.photos/seed/p${p.id}/400`;
-    return `<div class="card" onclick="location.hash='#/projects/${p.id}'"><img src="${img}" onerror="this.src='https://picsum.photos/seed/p'+${p.id}+'/400'" style="height:220px"><div class="meta"><span>👍 ${p.like_count}</span><span>💬 ${p.comment_count}</span><span>${stars(p.rating)}</span></div><div class="card-body"><div class="card-title">${p.title||'未命名作品'}</div><div style="font-size:12px;color:#888;margin-top:4px">来自教程：<b>${tut.title||'-'}</b></div><div class="flex" style="margin-top:10px"><div class="flex">${avatarFor(user)}<span style="font-size:13px;color:#666">${user.nickname||user.username||'匿名'}</span></div></div></div></div>`;
+    return `<div class="card" onclick="location.hash='#/projects/${p.id}'"><img src="${img}" onerror="this.src='https://picsum.photos/seed/p'+${p.id}+'/400'" style="height:220px"><div class="meta"><span>👍 ${p.like_count}</span><span>💬 ${p.comment_count}</span><span>${stars(p.rating)}</span></div><div class="card-body"><div class="card-title">${p.title||'未命名作品'}</div><div style="font-size:12px;color:#888;margin-top:4px">来自教程：<b>${tut.title||'-'}</b></div><div class="flex" style="margin-top:10px">${avatarLink(user)}${userLink(user)}</div></div></div>`;
   }).join('');
 }
 async function viewTutorials() {
@@ -197,7 +206,7 @@ async function viewTutorial(id) {
   let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/tutorials">教程</a> / <span>${t.title}</span></div>`;
   h += `<div style="display:flex;gap:10px;margin-bottom:10px;align-items:center">${difficultyBadge(t.difficulty)}<span style="color:#888">⏱ ${t.estimated_hours} 小时</span><span>${(t.tags||[]).map(x=>`<span class="tag">#${x.name}</span>`).join('')}</span></div>`;
   h += `<h1 style="font-size:30px;margin-bottom:12px">${t.title}</h1>`;
-  h += `<div class="flex-between" style="margin-bottom:18px"><div class="flex">${avatarFor(user)}<div><div style="font-weight:600">${user.nickname||user.username||'匿名'} <span style="color:#7c5cff;font-size:12px">[${levelLabel(user.level)}]</span></div><div style="font-size:12px;color:#888">${timeAgo(t.created_at)} · 👁${t.view_count} ❤️${t.favorite_count} 🛠${t.attempt_count}</div></div></div><div class="flex"><button class="btn btn-outline" onclick="toggleFav('tutorial',${t.id},this)">${fav?'❤️ 已收藏':'🤍 收藏'}</button><button class="btn btn-solid" onclick="attemptTut(${t.id})">🛠 我要尝试</button></div></div>`;
+  h += `<div class="flex-between" style="margin-bottom:18px"><div class="flex">${avatarLink(user)}<div><div style="font-weight:600">${user.id?`<a href="#/users/${user.id}">${user.nickname||user.username||'匿名'}</a>`:(user.nickname||user.username||'匿名')} <span style="color:#7c5cff;font-size:12px">[${levelLabel(user.level)}]</span></div><div style="font-size:12px;color:#888">${timeAgo(t.created_at)} · 👁${t.view_count} ❤️${t.favorite_count} 🛠${t.attempt_count}</div></div></div><div class="flex"><button class="btn btn-outline" onclick="toggleFav('tutorial',${t.id},this)">${fav?'❤️ 已收藏':'🤍 收藏'}</button><button class="btn btn-solid" onclick="attemptTut(${t.id})">🛠 我要尝试</button></div></div>`;
   h += `<div class="before-after" style="margin-bottom:24px"><div><div style="padding:6px 12px;background:#ffe3e3;color:#c92a2a;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;display:inline-block">改造前</div><img src="${t.cover_before}" style="border-radius:0 14px 14px 14px;width:100%;height:300px;object-fit:cover"></div><div><div style="padding:6px 12px;background:#d3f9d8;color:#2b8a3e;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;display:inline-block">改造后</div><img src="${t.cover_after}" style="border-radius:0 14px 14px 14px;width:100%;height:300px;object-fit:cover"></div></div>`;
   h += `<div class="card" style="padding:24px;margin-bottom:24px"><h2 style="font-size:18px;margin-bottom:10px">📝 简介</h2><p style="color:#555">${t.summary||'暂无简介'}</p></div>`;
   if ((t.materials||[]).length) {
@@ -222,7 +231,7 @@ async function viewTutorial(id) {
   if (cr.data && cr.data.list && cr.data.list.length) {
     cr.data.list.forEach(c => {
       const cu = c.user || {};
-      h += `<div class="card" style="padding:16px;margin-bottom:12px"><div class="flex" style="margin-bottom:8px">${avatarFor(cu)}<div><div style="font-weight:600">${cu.nickname||cu.username||'匿名'}</div><div style="font-size:12px;color:#888">${timeAgo(c.created_at)} · 👍 ${c.like_count}</div></div></div><p>${c.content}</p></div>`;
+      h += `<div class="card" style="padding:16px;margin-bottom:12px"><div class="flex" style="margin-bottom:8px">${avatarLink(cu)}<div><div style="font-weight:600">${cu.id?`<a href="#/users/${cu.id}">${cu.nickname||cu.username||'匿名'}</a>`:(cu.nickname||cu.username||'匿名')}</div><div style="font-size:12px;color:#888">${timeAgo(c.created_at)} · 👍 ${c.like_count}</div></div></div><p>${c.content}</p></div>`;
     });
   } else {
     h += `<div class="empty" style="padding:30px">还没有评论，抢个沙发吧~</div>`;
@@ -274,7 +283,7 @@ async function viewProject(id) {
   if (!imgs.length) imgs.push(`https://picsum.photos/seed/p${p.id}/800`);
   let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/projects">作品</a> / <span>${p.title||'作品详情'}</span></div>`;
   h += `<h1 style="font-size:28px;margin-bottom:12px">${p.title||'未命名作品'}</h1>`;
-  h += `<div class="flex-between" style="margin-bottom:20px"><div class="flex">${avatarFor(user)}<div><div style="font-weight:600">${user.nickname||user.username||'匿名'}</div><div style="font-size:12px;color:#888">${timeAgo(p.created_at)} · 👍 ${p.like_count} 💬 ${p.comment_count} ${stars(p.rating)}</div></div></div><div class="flex"><button class="btn btn-outline" onclick="likeProject(${p.id},this)">👍 点赞</button><a class="btn btn-solid" href="#/tutorials/${tut.id}">📖 查看原教程</a></div></div>`;
+  h += `<div class="flex-between" style="margin-bottom:20px"><div class="flex">${avatarLink(user)}<div><div style="font-weight:600">${user.id?`<a href="#/users/${user.id}">${user.nickname||user.username||'匿名'}</a>`:(user.nickname||user.username||'匿名')}</div><div style="font-size:12px;color:#888">${timeAgo(p.created_at)} · 👍 ${p.like_count} 💬 ${p.comment_count} ${stars(p.rating)}</div></div></div><div class="flex"><button class="btn btn-outline" onclick="likeProject(${p.id},this)">👍 点赞</button><a class="btn btn-solid" href="#/tutorials/${tut.id}">📖 查看原教程</a></div></div>`;
   if (imgs.length === 1) {
     h += `<img src="${imgs[0]}" style="width:100%;border-radius:14px;margin-bottom:20px;max-height:500px;object-fit:cover">`;
   } else {
@@ -288,7 +297,7 @@ async function viewProject(id) {
   if (cr.data && cr.data.list && cr.data.list.length) {
     cr.data.list.forEach(c => {
       const cu = c.user || {};
-      h += `<div class="card" style="padding:16px;margin-bottom:12px"><div class="flex" style="margin-bottom:8px">${avatarFor(cu)}<div><div style="font-weight:600">${cu.nickname||cu.username||'匿名'}</div><div style="font-size:12px;color:#888">${timeAgo(c.created_at)} · 👍 ${c.like_count}</div></div></div><p>${c.content}</p></div>`;
+      h += `<div class="card" style="padding:16px;margin-bottom:12px"><div class="flex" style="margin-bottom:8px">${avatarLink(cu)}<div><div style="font-weight:600">${cu.id?`<a href="#/users/${cu.id}">${cu.nickname||cu.username||'匿名'}</a>`:(cu.nickname||cu.username||'匿名')}</div><div style="font-size:12px;color:#888">${timeAgo(c.created_at)} · 👍 ${c.like_count}</div></div></div><p>${c.content}</p></div>`;
     });
   }
   $('#app').innerHTML = h;
@@ -297,6 +306,76 @@ async function likeProject(id, btn) {
   const r = await post('/projects/' + id + '/like', {}, false);
   if (!r.success) return toast(r.message, 'error');
   toast('+1 👍', 'success');
+}
+async function viewProfile(id) {
+  const r = await get('/users/' + id + '/profile', true);
+  if (!r.success) {
+    const disabled = r.code === 40300;
+    $('#app').innerHTML = `<div class="bread"><a href="#/">首页</a> / 用户主页</div>
+      <div class="empty" style="padding:70px 30px"><div class="empty-icon">${disabled ? '🚫' : '🔍'}</div>
+      <h2 style="margin-bottom:8px;color:#666">${disabled ? '该账号已被禁用' : '用户不存在'}</h2>
+      <p style="color:#999;max-width:440px;margin:0 auto 22px">${disabled ? '该账号因违反社区规则已被禁用，主页暂时无法访问。如有疑问可联系管理员。' : '找不到这个用户，TA 可能已注销账号，或者你访问的链接地址有误。'}</p>
+      <div class="flex" style="justify-content:center"><a class="btn btn-outline" href="javascript:history.back()">返回上一页</a><a class="btn btn-solid" href="#/">回到首页</a></div></div>`;
+    return;
+  }
+  const d = r.data;
+  const u = d.user;
+  const self = d.is_self || (state.user && state.user.id === u.id);
+  const name = u.nickname || u.username;
+  const specialties = (u.specialty || '').split(/[,，、/|]/).map(s => s.trim()).filter(Boolean);
+  const joined = (u.created_at || '').slice(0, 10);
+  let h = `<div class="bread"><a href="#/">首页</a> / 用户主页 / <span>${name}</span></div>`;
+  h += `<div class="card profile-hero">${profileAvatar(u)}
+    <div style="flex:1;min-width:0">
+      <h1 style="font-size:26px">${name} <span class="level-badge level-${u.level}">${levelLabel(u.level)}</span></h1>
+      <div class="profile-sub">@${u.username}${joined ? ' · 加入于 ' + joined : ''}</div>
+      ${specialties.length ? `<div class="chip-row" style="margin-top:10px">${specialties.map(s => `<span class="profile-specialty">🔧 ${s}</span>`).join('')}</div>` : ''}
+      <p class="profile-bio">${u.bio || '这个人很神秘，还没有填写简介'}</p>
+      <div class="profile-counts">
+        <div><b id="pf-followers">${d.followers}</b><span>粉丝</span></div>
+        <div><b>${d.following}</b><span>关注</span></div>
+        <div><b>${d.tutorial_total}</b><span>教程</span></div>
+        <div><b>${d.project_total}</b><span>作品</span></div>
+      </div>
+    </div>
+    <div class="profile-actions">
+      ${self
+        ? `<a class="btn btn-outline" href="#/me">进入个人中心</a><button class="btn btn-solid" onclick="editProfile()">✏️ 编辑资料</button>`
+        : (state.user
+            ? `<button class="btn ${d.is_following ? 'btn-outline' : 'btn-solid'}" id="follow-btn" onclick="toggleFollowProfile(${u.id},this)">${d.is_following ? '✓ 已关注' : '+ 关注'}</button>`
+            : `<button class="btn btn-solid" onclick="showLogin()">登录后关注</button>`)}
+    </div>
+  </div>`;
+  h += `<div class="section-title">📚 ${self ? '我发布的' : 'TA 发布的'}教程<small onclick="location.hash='#/tutorials?user_id=${u.id}'">查看全部 ${d.tutorial_total} →</small></div>`;
+  h += (d.tutorials || []).length
+    ? `<div class="grid grid-4">${renderTutorialCards(d.tutorials)}</div>`
+    : `<div class="empty" style="padding:40px">${self ? '还没有发布教程，去发布第一篇吧' : 'TA 还没有发布教程'}</div>`;
+  h += `<div class="section-title">🎨 ${self ? '我的' : 'TA 的'}改造作品<small onclick="location.hash='#/projects?user_id=${u.id}'">查看全部 ${d.project_total} →</small></div>`;
+  h += (d.projects || []).length
+    ? `<div class="grid grid-3">${renderProjectCards(d.projects)}</div>`
+    : `<div class="empty" style="padding:40px">${self ? '还没有上传改造作品' : 'TA 还没有上传改造作品'}</div>`;
+  $('#app').innerHTML = h;
+}
+async function toggleFollowProfile(id, btn) {
+  if (!requireLogin()) return;
+  const wasFollowing = btn.classList.contains('btn-outline');
+  btn.disabled = true;
+  const r = wasFollowing
+    ? await post('/me/follow/' + id, null, true, 'DELETE')
+    : await post('/me/follow', { following_id: id });
+  btn.disabled = false;
+  if (!r.success) return toast(r.message, 'error');
+  const nowFollowing = !wasFollowing;
+  btn.textContent = nowFollowing ? '✓ 已关注' : '+ 关注';
+  btn.className = 'btn ' + (nowFollowing ? 'btn-outline' : 'btn-solid');
+  const fc = $('#pf-followers');
+  if (fc) fc.textContent = Math.max(0, (parseInt(fc.textContent, 10) || 0) + (nowFollowing ? 1 : -1));
+  toast(nowFollowing ? '关注成功' : '已取消关注', 'success');
+}
+function profileAvatar(u) {
+  const letter = ((u && (u.nickname || u.username)) || 'U').charAt(0).toUpperCase();
+  if (u && u.avatar) return `<div class="profile-avatar-lg"><img src="${u.avatar}" alt="头像" onerror="this.outerHTML='<div class=profile-avatar-fallback>${letter}</div>'"></div>`;
+  return `<div class="profile-avatar-lg"><div class="profile-avatar-fallback">${letter}</div></div>`;
 }
 async function viewStats() {
   const r = await get('/stats', false);
@@ -308,7 +387,7 @@ async function viewStats() {
   h += `<div class="section-title">🔥 热门教程 TOP10</div>`;
   h += `<div class="card" style="padding:8px">${(d.top_tutorials||[]).map((t,i)=>`<div class="flex" style="padding:12px 16px;gap:16px;border-bottom:1px solid #f0f0f0;cursor:pointer" onclick="location.hash='#/tutorials/${t.id}'"><div style="font-weight:800;color:${i<3?'#ff5e6a':'#aaa'};font-size:18px;width:28px">${i+1}</div><img src="${t.cover_after}" style="width:60px;height:60px;border-radius:10px;object-fit:cover"><div style="flex:1"><div style="font-weight:600">${t.title}</div><div style="font-size:12px;color:#888;margin-top:4px">❤️ ${t.favorite_count} · 👁 ${t.view_count} · 🛠 ${t.attempt_count}</div></div></div>`).join('')}</div>`;
   h += `<div class="section-title">🏆 最活跃用户</div>`;
-  h += `<div class="grid grid-4">${(d.top_users||[]).map(u=>`<div class="card" style="padding:20px;text-align:center" onclick="location.hash='#/tutorials?user_id=${u.id}'">${avatarFor(u)}<div style="font-weight:600;margin:10px 0 4px">${u.nickname||u.username}</div><div style="font-size:12px;color:#7c5cff">[${levelLabel(u.level)}]</div><div style="font-size:13px;color:#888;margin-top:6px">积分 ${u.score} · 教程 ${u.tutorial_count}</div></div>`).join('')}</div>`;
+  h += `<div class="grid grid-4">${(d.top_users||[]).map(u=>`<div class="card" style="padding:20px;text-align:center" onclick="location.hash='#/users/${u.id}'">${avatarFor(u)}<div style="font-weight:600;margin:10px 0 4px">${u.nickname||u.username}</div><div style="font-size:12px;color:#7c5cff">[${levelLabel(u.level)}]</div><div style="font-size:13px;color:#888;margin-top:6px">积分 ${u.score} · 教程 ${u.tutorial_count}</div></div>`).join('')}</div>`;
   if (d.category_stats) {
     h += `<div class="section-title">📈 分类占比</div>`;
     const total = Object.values(d.category_stats).reduce((a,b)=>a+b,1)||1;
@@ -477,11 +556,20 @@ async function route() {
         break;
       }
       case 'stats': viewStats(); break;
-      case 'editor': editorView(); break;
+      case 'users': {
+        const uid = parts[1];
+        if (uid && /^\d+$/.test(uid)) viewProfile(uid);
+        else $('#app').innerHTML = `<div class="bread"><a href="#/">首页</a> / 用户主页</div><div class="empty" style="padding:70px 30px"><div class="empty-icon">🔍</div><h2 style="margin-bottom:8px;color:#666">用户不存在</h2><p style="color:#999;max-width:440px;margin:0 auto 22px">找不到这个用户，TA 可能已注销账号，或者你访问的链接地址有误。</p><a class="btn btn-solid" href="#/">回到首页</a></div>`;
+        break;
+      }      case 'editor': editorView(); break;
       case 'random': viewRandom(); break;
       case 'me': {
         const sub = parts[1];
-        if (sub === 'projects') viewProjects();
+        if (sub === 'projects') {
+          if (!requireLogin()) return;
+          location.hash = '#/projects?user_id=' + state.user.id;
+          return;
+        }
         else if (sub === 'favorites') viewFavorites();
         else if (sub === 'attempts') viewAttempts();
         else if (sub === 'messages') viewMessages();

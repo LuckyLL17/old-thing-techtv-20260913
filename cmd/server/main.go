@@ -94,6 +94,7 @@ func main() {
 	notifSvc := service.NewNotificationService(notifRepo)
 	auditSvc := service.NewAuditService(auditRepo)
 	historySvc := service.NewTutorialHistoryService(versionRepo, tutorialRepo, stepRepo, materialRepo, toolRepo)
+	profileSvc := service.NewProfileService(userRepo, tutorialRepo, projectRepo, followRepo)
 	updater := worker.NewStatsUpdater(userRepo, tutorialRepo, commentRepo, categoryRepo, tagRepo)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -104,6 +105,7 @@ func main() {
 		SearchSvc: searchSvc, RecommendSvc: recommendSvc,
 		StatsSvc: statsSvc, InteractSvc: interactSvc,
 		NotifSvc: notifSvc, AuditSvc: auditSvc, HistorySvc: historySvc,
+		ProfileSvc:  profileSvc,
 		FrontendDir: frontendDir,
 	})
 	r.POST("/api/v1/upload", middleware.Auth(authSvc), api.UploadHandler(&cfg.Upload))

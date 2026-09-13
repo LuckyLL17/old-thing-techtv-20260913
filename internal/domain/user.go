@@ -3,10 +3,15 @@ package domain
 import "time"
 
 const (
-	UserLevelNovice = "novice"
+	UserLevelNovice     = "novice"
 	UserLevelApprentice = "apprentice"
 	UserLevelCraftsman  = "craftsman"
 	UserLevelMaster     = "master"
+)
+
+const (
+	UserStatusDisabled = 0
+	UserStatusActive   = 1
 )
 
 type User struct {

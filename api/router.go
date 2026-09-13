@@ -16,20 +16,21 @@ import (
 )
 
 type Deps struct {
-	Cfg            *config.Config
-	AuthSvc        *service.AuthService
-	TutorialSvc    *service.TutorialService
-	ProjectSvc     *service.ProjectService
-	CategorySvc    *service.CategoryService
-	TagSvc         *service.TagService
-	SearchSvc      *service.SearchService
-	RecommendSvc   *service.RecommendService
-	StatsSvc       *service.StatsService
-	InteractSvc    *service.InteractionService
-	NotifSvc       *service.NotificationService
-	AuditSvc       *service.AuditService
-	HistorySvc     *service.TutorialHistoryService
-	FrontendDir    string
+	Cfg          *config.Config
+	AuthSvc      *service.AuthService
+	TutorialSvc  *service.TutorialService
+	ProjectSvc   *service.ProjectService
+	CategorySvc  *service.CategoryService
+	TagSvc       *service.TagService
+	SearchSvc    *service.SearchService
+	RecommendSvc *service.RecommendService
+	StatsSvc     *service.StatsService
+	InteractSvc  *service.InteractionService
+	NotifSvc     *service.NotificationService
+	AuditSvc     *service.AuditService
+	HistorySvc   *service.TutorialHistoryService
+	ProfileSvc   *service.ProfileService
+	FrontendDir  string
 }
 
 func SetupRouter(d *Deps) *gin.Engine {
@@ -48,6 +49,7 @@ func SetupRouter(d *Deps) *gin.Engine {
 	notifH := handler.NewNotificationHandler(d.NotifSvc)
 	auditH := handler.NewAuditHandler(d.AuditSvc)
 	histH := handler.NewTutorialHistoryHandler(d.HistorySvc)
+	profileH := handler.NewProfileHandler(d.ProfileSvc)
 	api.GET("/home", searchH.Home)
 	api.GET("/random", searchH.Random)
 	api.GET("/top", searchH.Top)
@@ -114,6 +116,7 @@ func SetupRouter(d *Deps) *gin.Engine {
 		admin.GET("/audit/stats", auditH.Stats)
 	}
 	api.GET("/users/:id/follow", middleware.OptionalAuth(d.AuthSvc), statsH.FollowInfo)
+	api.GET("/users/:id/profile", middleware.OptionalAuth(d.AuthSvc), profileH.Profile)
 	api.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "version": "1.0"})
 	})

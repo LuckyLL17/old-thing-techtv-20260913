@@ -302,6 +302,7 @@ rate:
 | PUT  | `/auth/me` | 更新昵称/头像/擅长领域 | 是 |
 | POST | `/auth/reset-password` | 重置密码（旧→新） | 是 |
 | GET  | `/auth/center` | 个人中心改造统计 | 是 |
+| GET  | `/users/:id/profile` | 用户主页：资料+粉丝/关注数+已发布教程+作品+关注关系 | 可选 |
 
 ### 教程
 
