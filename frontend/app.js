@@ -66,13 +66,15 @@ async function ensureUser() {
 }
 function renderUserArea() {
   const area = $('#user-area');
+  const adminNav = $('#nav-admin');
+  if (adminNav) adminNav.style.display = state.user && state.user.is_admin ? '' : 'none';
   if (!area) return;
   if (!state.user) {
     area.innerHTML = `<button class="btn btn-ghost" onclick="showLogin()">登录</button><button class="btn btn-ghost" onclick="showRegister()">注册</button>`;
     return;
   }
   const u = state.user;
-  area.innerHTML = `<div class="user-menu">${avatarFor(u)}<span>${u.nickname||u.username}</span><div class="dropdown" id="ud" style="display:none"><a href="#/me">个人中心</a><a href="#/editor">发布教程</a><a href="#/me/projects">我的作品</a><a href="javascript:logout()">退出登录</a></div></div>`;
+  area.innerHTML = `<div class="user-menu">${avatarFor(u)}<span>${u.nickname||u.username}</span><div class="dropdown" id="ud" style="display:none"><a href="#/me">个人中心</a><a href="#/editor">发布教程</a><a href="#/me/projects">我的作品</a>${u.is_admin?'<a href="#/admin/audit">审计导出</a>':''}<a href="javascript:logout()">退出登录</a></div></div>`;
   area.querySelector('.user-menu').onclick = e => { e.stopPropagation(); const d = $('#ud'); d.style.display = d.style.display === 'none' ? 'block' : 'none'; };
   document.body.onclick = () => { const d = $('#ud'); if (d) d.style.display = 'none'; };
 }
@@ -175,15 +177,15 @@ function parseHashQuery() {
   const o = {}; p.forEach((v, k) => o[k] = v);
   return o;
 }
-function pagination(total, page, size) {
+function pagination(total, page, size, onclick = 'route()') {
   const pages = Math.ceil(total / size) || 1;
   if (pages <= 1) return '';
   let h = `<div class="pagination">`;
-  if (page > 1) h += `<button class="page-btn" onclick="state.page=${page-1};route()">‹</button>`;
+  if (page > 1) h += `<button class="page-btn" onclick="state.page=${page-1};${onclick}">‹</button>`;
   for (let i = Math.max(1, page-2); i <= Math.min(pages, page+2); i++) {
-    h += `<button class="page-btn ${i===page?'page-btn-active':''}" onclick="state.page=${i};route()">${i}</button>`;
+    h += `<button class="page-btn ${i===page?'page-btn-active':''}" onclick="state.page=${i};${onclick}">${i}</button>`;
   }
-  if (page < pages) h += `<button class="page-btn" onclick="state.page=${page+1};route()">›</button>`;
+  if (page < pages) h += `<button class="page-btn" onclick="state.page=${page+1};${onclick}">›</button>`;
   h += `</div>`;
   return h;
 }
@@ -444,6 +446,150 @@ async function viewRandom() {
   h += `<div class="grid grid-4">${renderTutorialCards(r.data||[])}</div>`;
   $('#app').innerHTML = h;
 }
+const auditActions = [
+  ['', '全部动作'], ['login', '登录'], ['logout', '退出登录'], ['register', '注册'], ['password_reset', '重置密码'], ['profile_update', '更新资料'],
+  ['tutorial_create', '创建教程'], ['tutorial_update', '更新教程'], ['tutorial_delete', '删除教程'], ['tutorial_publish', '发布教程'], ['tutorial_archive', '归档教程'], ['tutorial_rollback', '回滚版本'],
+  ['project_create', '创建作品'], ['project_delete', '删除作品'], ['comment_create', '发表评论'], ['comment_delete', '删除评论'],
+  ['favorite_toggle', '切换收藏'], ['follow_toggle', '切换关注'], ['attempt_toggle', '切换尝试'],
+  ['admin_audit_pass', '审核通过'], ['admin_audit_reject', '审核驳回'], ['admin_user_ban', '禁用用户'], ['admin_category_edit', '编辑分类']
+];
+const auditTargets = [
+  ['', '全部目标类型'], ['user', '用户'], ['tutorial', '教程'], ['project', '作品'], ['comment', '评论'], ['category', '分类'], ['system', '系统']
+];
+const auditStatusMap = { queued: ['排队中', 'warn'], running: ['生成中', 'info'], succeeded: ['已完成', 'success'], failed: ['失败', 'error'] };
+const auditErrorMap = { permission: '权限问题', range: '筛选范围问题', generation: '文件生成问题' };
+let auditPollTimer = null;
+async function viewAdminAudit() {
+  stopAuditPolling();
+  if (!requireLogin()) return;
+  if (!state.user.is_admin) {
+    $('#app').innerHTML = `<div class="empty"><div class="empty-icon">🔒</div>需要管理员权限才能访问审计日志</div>`;
+    return;
+  }
+  const qs = parseHashQuery();
+  const filters = {
+    operator: qs.operator || '', action: qs.action || '', target_type: qs.target_type || '',
+    from: qs.from || '', to: qs.to || ''
+  };
+  state.auditFilters = filters;
+  let h = `<div class="bread"><a href="#/">首页</a> / 审计日志导出</div>`;
+  h += `<div class="flex-between" style="margin-bottom:18px"><div><h1 style="font-size:26px">🛡️ 后台操作审计</h1><div style="color:#888;font-size:13px">按当前筛选条件后台生成 CSV，完成后可下载留档，文件保留 7 天。</div></div><button class="btn btn-outline" onclick="viewAdminAudit()">刷新</button></div>`;
+  h += `<div class="card audit-filter"><div class="form-grid"><div><label class="label">操作人（ID / 用户名 / 昵称）</label><input class="input" id="af_operator" value="${filters.operator||''}" placeholder="如 1 / admin / 用户名"></div><div><label class="label">动作</label><select class="input" id="af_action">${auditActions.map(([v,n])=>`<option value="${v}" ${filters.action===v?'selected':''}>${n}</option>`).join('')}</select></div><div><label class="label">目标类型</label><select class="input" id="af_target_type">${auditTargets.map(([v,n])=>`<option value="${v}" ${filters.target_type===v?'selected':''}>${n}</option>`).join('')}</select></div><div class="form-grid"><div><label class="label">开始时间</label><input class="input" id="af_from" type="datetime-local" value="${filters.from||''}"></div><div><label class="label">结束时间</label><input class="input" id="af_to" type="datetime-local" value="${filters.to||''}"></div></div></div><div class="audit-actions"><button class="btn btn-outline" onclick="loadAuditPreview()">查询预览</button><button class="btn btn-solid" onclick="submitAuditExport()">⬇️ 按当前筛选导出 CSV</button><span id="audit_export_tip" class="audit-tip"></span></div></div>`;
+  h += `<div id="audit_preview"><div class="loading">正在加载筛选结果...</div></div>`;
+  h += `<div class="section-title">导出任务</div><div id="audit_jobs"><div class="loading">正在加载任务...</div></div>`;
+  $('#app').innerHTML = h;
+  await Promise.all([loadAuditPreview(), refreshAuditJobs()]);
+}
+function collectAuditFilters() {
+  return {
+    operator: ($('#af_operator')?.value || state.auditFilters?.operator || '').trim(),
+    action: $('#af_action')?.value || state.auditFilters?.action || '',
+    target_type: $('#af_target_type')?.value || state.auditFilters?.target_type || '',
+    from: ($('#af_from')?.value || state.auditFilters?.from || '').trim(),
+    to: ($('#af_to')?.value || state.auditFilters?.to || '').trim()
+  };
+}
+function auditQueryString() {
+  const f = collectAuditFilters();
+  state.auditFilters = f;
+  const p = new URLSearchParams();
+  Object.entries(f).forEach(([k,v]) => { if (v) p.set(k, v); });
+  p.set('page', state.page || 1);
+  p.set('size', 50);
+  return p.toString();
+}
+function auditActionName(action) {
+  const item = auditActions.find(x => x[0] === action);
+  return item ? item[1] : action;
+}
+function auditOperator(l) {
+  const u = l.user || {};
+  return u.nickname || u.username || ('用户ID:' + l.user_id);
+}
+async function loadAuditPreview() {
+  const box = $('#audit_preview');
+  if (!box) return;
+  box.innerHTML = `<div class="loading">正在加载筛选结果...</div>`;
+  const r = await get('/admin/audit?' + auditQueryString());
+  if (!r.success) {
+    const category = r.error_category ? `（${auditErrorMap[r.error_category] || r.error_category}）` : '';
+    box.innerHTML = `<div class="empty">${r.message || '查询失败'}${category}</div>`;
+    return;
+  }
+  const d = r.data;
+  const f = state.auditFilters || {};
+  let h = `<div class="flex-between audit-summary"><div>当前筛选共 <b>${d.total}</b> 条；导出 CSV 将使用与下方完全相同的筛选条件。</div><div class="audit-filter-tags"><span class="pill">操作人：${f.operator||'全部'}</span><span class="pill">动作：${auditActionName(f.action)||'全部'}</span><span class="pill">目标：${auditTargets.find(x=>x[0]===(f.target_type||''))?.[1]||'全部'}</span><span class="pill">时间：${f.from||'不限'} ~ ${f.to||'不限'}</span></div></div>`;
+  h += `<div class="card table-card"><table class="audit-table"><thead><tr><th>时间</th><th>操作人</th><th>动作</th><th>目标</th><th>来源地址</th><th>备注</th></tr></thead><tbody>`;
+  h += (d.list||[]).map(l => `<tr><td>${(l.created_at||'').replace('T',' ').slice(0,19)}</td><td>${auditOperator(l)}</td><td>${auditActionName(l.action)}</td><td>${l.target_type||'-'}${l.target_id?'#'+l.target_id:''}</td><td>${l.ip||'-'}</td><td>${l.remark||'-'}</td></tr>`).join('') || `<tr><td colspan="6" class="empty-cell">当前筛选暂无日志；仍可导出仅含表头的 CSV。</td></tr>`;
+  h += `</tbody></table></div>`;
+  h += pagination(d.total, d.page, d.size, 'loadAuditPreview()');
+  box.innerHTML = h;
+}
+async function submitAuditExport() {
+  const f = collectAuditFilters();
+  if (!f.from || !f.to) {
+    if (!confirm('未填写完整时间范围可能导出较多历史数据，确定继续吗？')) return;
+  }
+  const tip = $('#audit_export_tip');
+  if (tip) tip.textContent = '正在提交后台任务...';
+  const r = await post('/admin/audit/exports', f);
+  if (!r.success) {
+    const category = r.error_category ? `（${auditErrorMap[r.error_category] || r.error_category}）` : '';
+    if (tip) tip.textContent = (r.message || '提交失败') + category;
+    toast((r.message || '提交失败') + category, 'error');
+    return;
+  }
+  if (tip) tip.textContent = '任务已提交，正在后台生成，本页面不会一直等待。';
+  toast('导出任务已提交', 'success');
+  await refreshAuditJobs();
+  pollAuditJob(r.data.id);
+}
+async function refreshAuditJobs() {
+  const box = $('#audit_jobs');
+  if (!box) return;
+  const r = await get('/admin/audit/exports');
+  if (!r.success) { box.innerHTML = `<div class="empty">${r.message || '任务加载失败'}</div>`; return; }
+  const list = r.data || [];
+  if (!list.length) { box.innerHTML = `<div class="empty">暂无导出任务</div>`; return; }
+  box.innerHTML = `<div class="card table-card"><table class="audit-table"><thead><tr><th>提交时间</th><th>状态</th><th>筛选条件</th><th>行数</th><th>错误类型/说明</th><th>操作</th></tr></thead><tbody>${list.map(renderAuditJob).join('')}</tbody></table></div>`;
+}
+function renderAuditJob(j) {
+  const st = auditStatusMap[j.status] || [j.status, 'warn'];
+  const filters = [j.operator?'操作人:'+j.operator:'', j.action?'动作:'+j.action:'', j.target_type?'目标:'+j.target_type:'', j.from?'起始:'+String(j.from).slice(0,16):'', j.to?'截止:'+String(j.to).slice(0,16):''].filter(Boolean).join('；') || '全部日志';
+  const err = j.status === 'failed' ? `${auditErrorMap[j.error_category] || j.error_category || '生成问题'}：${j.error_message || '生成失败'}` : '-';
+  const action = j.status === 'succeeded' ? `<button class="btn btn-solid" onclick="downloadAuditExport(${j.id})">下载 CSV</button>` : j.status === 'failed' ? '<span class="muted">请调整后重新提交</span>' : `<button class="btn btn-gray" onclick="pollAuditJob(${j.id})">刷新状态</button>`;
+  return `<tr><td>${String(j.created_at||'').replace('T',' ').slice(0,19)}</td><td><span class="job-status ${st[1]}">${st[0]}</span></td><td>${filters}</td><td>${j.row_count ?? 0}</td><td>${err}</td><td>${action}</td></tr>`;
+}
+async function pollAuditJob(id) {
+  if (auditPollTimer) clearTimeout(auditPollTimer);
+  const r = await get('/admin/audit/exports/' + id);
+  if (r.success && $('#audit_jobs')) await refreshAuditJobs();
+  if (r.success && (r.data.status === 'queued' || r.data.status === 'running')) {
+    auditPollTimer = setTimeout(() => pollAuditJob(id), 1500);
+  }
+}
+function stopAuditPolling() {
+  if (auditPollTimer) {
+    clearTimeout(auditPollTimer);
+    auditPollTimer = null;
+  }
+}
+async function downloadAuditExport(id) {
+  const r = await fetch(`${API}/admin/audit/exports/${id}/download`, { headers: { Authorization: 'Bearer ' + state.token } });
+  if (!r.ok) {
+    let msg = '下载失败';
+    try { const data = await r.json(); msg = data.message || msg; } catch {}
+    toast(msg, 'error');
+    return;
+  }
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `audit_logs_${id}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
 async function route() {
   const hash = location.hash.slice(1) || '/';
   const [path, query] = hash.split('?');
@@ -477,6 +623,10 @@ async function route() {
         break;
       }
       case 'stats': viewStats(); break;
+      case 'admin':
+        if (parts[1] === 'audit') viewAdminAudit();
+        else $('#app').innerHTML = `<div class="empty">页面不存在</div>`;
+        break;
       case 'editor': editorView(); break;
       case 'random': viewRandom(); break;
       case 'me': {

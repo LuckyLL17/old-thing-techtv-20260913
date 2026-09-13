@@ -175,12 +175,49 @@ func (r *NotificationRepo) DeleteByUser(uid uint64, before *time.Time) (int64, e
 	return res.RowsAffected, nil
 }
 
+type AuditFilter struct {
+	UserID     uint64
+	Operator   string
+	Action     string
+	TargetType string
+	From       *time.Time
+	To         *time.Time
+}
+
 type AuditLogRepo struct {
 	db *gorm.DB
 }
 
 func NewAuditLogRepo(db *gorm.DB) *AuditLogRepo {
 	return &AuditLogRepo{db: db}
+}
+
+func applyAuditFilter(q *gorm.DB, f AuditFilter) *gorm.DB {
+	if f.UserID > 0 {
+		q = q.Where("audit_logs.user_id = ?", f.UserID)
+	}
+	if f.Operator != "" {
+		like := "%" + f.Operator + "%"
+		q = q.Joins("LEFT JOIN users ON users.id = audit_logs.user_id").
+			Where("users.username LIKE ? OR users.nickname LIKE ? OR users.email LIKE ?", like, like, like)
+	}
+	if f.Action != "" {
+		q = q.Where("audit_logs.action = ?", f.Action)
+	}
+	if f.TargetType != "" {
+		q = q.Where("audit_logs.target_type = ?", f.TargetType)
+	}
+	if f.From != nil {
+		q = q.Where("audit_logs.created_at >= ?", *f.From)
+	}
+	if f.To != nil {
+		q = q.Where("audit_logs.created_at <= ?", *f.To)
+	}
+	return q
+}
+
+func auditFilterQuery(db *gorm.DB, f AuditFilter) *gorm.DB {
+	return applyAuditFilter(db.Model(&domain.AuditLog{}), f)
 }
 
 func (r *AuditLogRepo) Create(l *domain.AuditLog) error {
@@ -191,26 +228,10 @@ func (r *AuditLogRepo) Create(l *domain.AuditLog) error {
 	return nil
 }
 
-func (r *AuditLogRepo) List(page, size int, userID uint64, action, targetType string, from, to *time.Time) ([]*domain.AuditLog, int64, error) {
+func (r *AuditLogRepo) List(page, size int, f AuditFilter) ([]*domain.AuditLog, int64, error) {
 	var list []*domain.AuditLog
 	var total int64
-	q := r.db.Model(&domain.AuditLog{})
-	if userID > 0 {
-		q = q.Where("user_id = ?", userID)
-	}
-	if action != "" {
-		q = q.Where("action = ?", action)
-	}
-	if targetType != "" {
-		q = q.Where("target_type = ?", targetType)
-	}
-	if from != nil {
-		q = q.Where("created_at >= ?", *from)
-	}
-	if to != nil {
-		q = q.Where("created_at <= ?", *to)
-	}
-	if err := q.Count(&total).Error; err != nil {
+	if err := auditFilterQuery(r.db, f).Count(&total).Error; err != nil {
 		return nil, 0, apperr.Wrap(apperr.CodeDB, "统计审计日志数量失败", err)
 	}
 	if page < 1 {
@@ -220,11 +241,47 @@ func (r *AuditLogRepo) List(page, size int, userID uint64, action, targetType st
 		size = 30
 	}
 	offset := (page - 1) * size
-	err := q.Preload("User").Order("id DESC").Offset(offset).Limit(size).Find(&list).Error
+	err := auditFilterQuery(r.db, f).Preload("User").Order("audit_logs.id DESC").Offset(offset).Limit(size).Find(&list).Error
 	if err != nil {
 		return nil, 0, apperr.Wrap(apperr.CodeDB, "查询审计日志失败", err)
 	}
 	return list, total, nil
+}
+
+func (r *AuditLogRepo) CountFiltered(f AuditFilter) (int64, error) {
+	var total int64
+	if err := auditFilterQuery(r.db, f).Count(&total).Error; err != nil {
+		return 0, apperr.Wrap(apperr.CodeDB, "统计审计日志数量失败", err)
+	}
+	return total, nil
+}
+
+func (r *AuditLogRepo) ForEachFiltered(f AuditFilter, batchSize int, fn func([]*domain.AuditLog) error) error {
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+	var list []*domain.AuditLog
+	var lastID *uint64
+	for {
+		q := auditFilterQuery(r.db, f).Preload("User").Order("audit_logs.id DESC").Limit(batchSize)
+		if lastID != nil {
+			q = q.Where("audit_logs.id < ?", *lastID)
+		}
+		if err := q.Find(&list).Error; err != nil {
+			return apperr.Wrap(apperr.CodeDB, "读取审计日志失败", err)
+		}
+		if len(list) == 0 {
+			return nil
+		}
+		if err := fn(list); err != nil {
+			return err
+		}
+		lastID = &list[len(list)-1].ID
+		if len(list) < batchSize {
+			return nil
+		}
+		list = nil
+	}
 }
 
 func (r *AuditLogRepo) StatsByAction(days int) (map[string]int64, error) {

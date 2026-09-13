@@ -220,8 +220,8 @@ func (s *AuditService) Log(userID uint64, action, targetType string, targetID ui
 	return s.repo.Create(l)
 }
 
-func (s *AuditService) List(page, size int, userID uint64, action, targetType string, from, to *time.Time) ([]*domain.AuditLog, int64, error) {
-	return s.repo.List(page, size, userID, action, targetType, from, to)
+func (s *AuditService) List(page, size int, filter repository.AuditFilter) ([]*domain.AuditLog, int64, error) {
+	return s.repo.List(page, size, filter)
 }
 
 func (s *AuditService) Stats(days int) (map[string]int64, error) {

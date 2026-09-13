@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 	"upcycle-hub/internal/middleware"
+	"upcycle-hub/internal/repository"
 	"upcycle-hub/internal/service"
 	apperr "upcycle-hub/pkg/errors"
 
@@ -118,18 +121,87 @@ type AdminAuditQuery struct {
 	Page       int    `form:"page"`
 	Size       int    `form:"size"`
 	UserID     uint64 `form:"user_id"`
+	Operator   string `form:"operator"`
 	Action     string `form:"action"`
 	TargetType string `form:"target_type"`
 	From       string `form:"from"`
 	To         string `form:"to"`
 }
 
-type AuditHandler struct {
-	svc *service.AuditService
+type CreateAuditExportReq struct {
+	UserID     uint64 `json:"user_id"`
+	Operator   string `json:"operator"`
+	Action     string `json:"action"`
+	TargetType string `json:"target_type"`
+	From       string `json:"from"`
+	To         string `json:"to"`
 }
 
-func NewAuditHandler(s *service.AuditService) *AuditHandler {
-	return &AuditHandler{svc: s}
+type AuditHandler struct {
+	svc       *service.AuditService
+	exportSvc *service.AuditExportService
+}
+
+func NewAuditHandler(s *service.AuditService, es *service.AuditExportService) *AuditHandler {
+	return &AuditHandler{svc: s, exportSvc: es}
+}
+
+func parseAuditFilter(userID uint64, operator, action, targetType, from, to string) (repository.AuditFilter, error) {
+	filter := repository.AuditFilter{
+		UserID:     userID,
+		Operator:   strings.TrimSpace(operator),
+		Action:     strings.TrimSpace(action),
+		TargetType: strings.TrimSpace(targetType),
+	}
+	if filter.UserID == 0 {
+		if id, err := strconv.ParseUint(filter.Operator, 10, 64); err == nil && id > 0 {
+			filter.UserID = id
+			filter.Operator = ""
+		}
+	}
+	var err error
+	if from != "" {
+		if filter.From, err = parseAuditTime(from, false); err != nil {
+			return filter, apperr.New(apperr.CodeValidation, "开始时间格式无效，支持 YYYY-MM-DD 或 YYYY-MM-DD HH:mm:ss")
+		}
+	}
+	if to != "" {
+		if filter.To, err = parseAuditTime(to, true); err != nil {
+			return filter, apperr.New(apperr.CodeValidation, "结束时间格式无效，支持 YYYY-MM-DD 或 YYYY-MM-DD HH:mm:ss")
+		}
+	}
+	if filter.From != nil && filter.To != nil && filter.From.After(*filter.To) {
+		return filter, apperr.New(apperr.CodeValidation, "时间范围无效：开始时间不能晚于结束时间")
+	}
+	if filter.From != nil && filter.To != nil && filter.To.Sub(*filter.From) > 365*24*time.Hour {		return filter, apperr.New(apperr.CodeValidation, "时间范围过大：单次导出不能超过 365 天")
+	}
+	return filter, nil
+}
+
+func parseAuditTime(value string, endOfDay bool) (*time.Time, error) {
+	value = strings.TrimSpace(value)
+	layouts := []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02T15:04:05", "2006-01-02T15:04", "2006-01-02"}
+	for _, layout := range layouts {
+		if t, err := time.ParseInLocation(layout, value, time.Local); err == nil {
+			if endOfDay && layout == "2006-01-02" {
+				t = t.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+			}
+			return &t, nil
+		}
+	}
+	return nil, fmt.Errorf("invalid audit time: %s", value)
+}
+
+func auditFail(c *gin.Context, err error, exportCategory string) {
+	if ae, ok := err.(*apperr.AppError); ok {
+		category := exportCategory
+		if ae.Code == apperr.CodeForbidden || ae.Code == apperr.CodeUnauthorized {
+			category = service.AuditExportErrorPermission
+		}
+		c.JSON(httpCode(ae.Code), gin.H{"code": ae.Code, "message": ae.Message, "error_category": category, "success": false})
+		return
+	}
+	c.JSON(500, gin.H{"code": 50000, "message": err.Error(), "error_category": service.AuditExportErrorGeneration, "success": false})
 }
 
 func (h *AuditHandler) List(c *gin.Context) {
@@ -141,23 +213,12 @@ func (h *AuditHandler) List(c *gin.Context) {
 	if q.Size <= 0 || q.Size > 200 {
 		q.Size = 30
 	}
-	var from, to *time.Time
-	if q.From != "" {
-		if t, err := time.ParseInLocation("2006-01-02 15:04:05", q.From, time.Local); err == nil {
-			from = &t
-		} else if t, err := time.ParseInLocation("2006-01-02", q.From, time.Local); err == nil {
-			from = &t
-		}
+	filter, err := parseAuditFilter(q.UserID, q.Operator, q.Action, q.TargetType, q.From, q.To)
+	if err != nil {
+		Fail(c, err)
+		return
 	}
-	if q.To != "" {
-		if t, err := time.ParseInLocation("2006-01-02 15:04:05", q.To, time.Local); err == nil {
-			to = &t
-		} else if t, err := time.ParseInLocation("2006-01-02", q.To, time.Local); err == nil {
-			t = t.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
-			to = &t
-		}
-	}
-	list, total, err := h.svc.List(q.Page, q.Size, q.UserID, q.Action, q.TargetType, from, to)
+	list, total, err := h.svc.List(q.Page, q.Size, filter)
 	if err != nil {
 		Fail(c, err)
 		return
@@ -178,6 +239,79 @@ func (h *AuditHandler) Stats(c *gin.Context) {
 		return
 	}
 	OK(c, data)
+}
+
+func (h *AuditHandler) CreateExport(c *gin.Context) {
+	uid := middleware.MustLogin(c)
+	req := &CreateAuditExportReq{}
+	if c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(req); err != nil {
+			c.JSON(422, gin.H{"code": 42200, "message": "请求参数错误", "error_category": service.AuditExportErrorRange, "success": false})
+			return
+		}
+	}
+	filter, err := parseAuditFilter(req.UserID, req.Operator, req.Action, req.TargetType, req.From, req.To)
+	if err != nil {
+		c.JSON(422, gin.H{"code": 42200, "message": err.Error(), "error_category": service.AuditExportErrorRange, "success": false})
+		return
+	}
+	job, err := h.exportSvc.Create(uid, filter)
+	if err != nil {
+		category := service.AuditExportErrorGeneration
+		if ae, ok := err.(*apperr.AppError); ok && ae.Code == apperr.CodeValidation {
+			category = service.AuditExportErrorRange
+		}
+		auditFail(c, err, category)
+		return
+	}
+	c.JSON(202, gin.H{"code": 0, "message": "导出任务已提交，正在后台生成", "success": true, "data": job})
+}
+
+func (h *AuditHandler) ListExports(c *gin.Context) {
+	uid := middleware.MustLogin(c)
+	list, err := h.exportSvc.List(uid)
+	if err != nil {
+		auditFail(c, err, service.AuditExportErrorGeneration)
+		return
+	}
+	OK(c, list)
+}
+
+func (h *AuditHandler) GetExport(c *gin.Context) {
+	uid := middleware.MustLogin(c)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		Fail(c, apperr.ErrBadRequest)
+		return
+	}
+	job, err := h.exportSvc.Get(uid, id, c.GetBool("is_admin"))
+	if err != nil {
+		auditFail(c, err, service.AuditExportErrorGeneration)
+		return
+	}
+	OK(c, job)
+}
+
+func (h *AuditHandler) DownloadExport(c *gin.Context) {
+	uid := middleware.MustLogin(c)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		Fail(c, apperr.ErrBadRequest)
+		return
+	}
+	job, err := h.exportSvc.Get(uid, id, c.GetBool("is_admin"))
+	if err != nil {
+		auditFail(c, err, service.AuditExportErrorGeneration)
+		return
+	}
+	path, fileName, err := h.exportSvc.FilePath(job)
+	if err != nil {
+		auditFail(c, err, service.AuditExportErrorGeneration)
+		return
+	}
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", "attachment; filename*=UTF-8''"+fileName)
+	c.FileAttachment(path, fileName)
 }
 
 type HistoryQuery struct {

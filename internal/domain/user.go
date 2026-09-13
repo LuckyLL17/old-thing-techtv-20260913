@@ -22,6 +22,7 @@ type User struct {
 	TutorialCount int       `gorm:"default:0" json:"tutorial_count"`
 	ProjectCount  int       `gorm:"default:0" json:"project_count"`
 	Score         int       `gorm:"default:0" json:"score"`
+	IsAdmin       bool      `gorm:"default:false" json:"is_admin"`
 	Status        int       `gorm:"default:1" json:"status"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`

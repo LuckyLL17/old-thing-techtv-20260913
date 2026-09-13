@@ -28,6 +28,7 @@ type Deps struct {
 	InteractSvc    *service.InteractionService
 	NotifSvc       *service.NotificationService
 	AuditSvc       *service.AuditService
+	AuditExportSvc *service.AuditExportService
 	HistorySvc     *service.TutorialHistoryService
 	FrontendDir    string
 }
@@ -46,7 +47,7 @@ func SetupRouter(d *Deps) *gin.Engine {
 	searchH := handler.NewSearchHandler(d.SearchSvc, d.RecommendSvc)
 	statsH := handler.NewStatsHandler(d.StatsSvc, d.InteractSvc)
 	notifH := handler.NewNotificationHandler(d.NotifSvc)
-	auditH := handler.NewAuditHandler(d.AuditSvc)
+	auditH := handler.NewAuditHandler(d.AuditSvc, d.AuditExportSvc)
 	histH := handler.NewTutorialHistoryHandler(d.HistorySvc)
 	api.GET("/home", searchH.Home)
 	api.GET("/random", searchH.Random)
@@ -108,10 +109,14 @@ func SetupRouter(d *Deps) *gin.Engine {
 		me.POST("/notifications/read-all", notifH.MarkAllRead)
 		me.DELETE("/notifications", notifH.Clear)
 	}
-	admin := api.Group("/admin", middleware.Auth(d.AuthSvc))
+	admin := api.Group("/admin", middleware.Auth(d.AuthSvc), middleware.RequireAdmin(d.AuthSvc))
 	{
 		admin.GET("/audit", auditH.List)
 		admin.GET("/audit/stats", auditH.Stats)
+		admin.POST("/audit/exports", auditH.CreateExport)
+		admin.GET("/audit/exports", auditH.ListExports)
+		admin.GET("/audit/exports/:id", auditH.GetExport)
+		admin.GET("/audit/exports/:id/download", auditH.DownloadExport)
 	}
 	api.GET("/users/:id/follow", middleware.OptionalAuth(d.AuthSvc), statsH.FollowInfo)
 	api.GET("/health", func(c *gin.Context) {

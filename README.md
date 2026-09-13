@@ -38,7 +38,7 @@
 | 有效 Go 代码行（去空行/纯注释） | 5,410 行 |
 | 前端（HTML/CSS/JS） | 651 行 |
 | SQLite 迁移脚本 | 6 个 SQL |
-| 数据库表 | 16 张（users / categories / tags / tutorials / tutorial_versions / tutorial_tags / steps / materials / tools / projects / comments / favorites / attempts / follows / messages / notifications / audit_logs） |
+| 数据库表 | 18 张（users / categories / tags / tutorials / tutorial_versions / tutorial_tags / steps / materials / tools / projects / comments / favorites / attempts / follows / messages / notifications / audit_logs / audit_exports） |
 
 ## 目录结构
 
@@ -367,8 +367,14 @@ rate:
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/audit` | 审计日志：支持 `user_id/action/target_type/from/to` 过滤分页 |
+| GET | `/audit` | 审计日志：支持 `user_id/operator/action/target_type/from/to` 过滤分页 |
 | GET | `/audit/stats` | 按动作聚合计数，`days=30` 指定统计窗口 |
+| POST | `/audit/exports` | 提交异步 CSV 导出任务（202），筛选条件与列表一致 |
+| GET | `/audit/exports` | 当前管理员的导出任务列表 |
+| GET | `/audit/exports/:id` | 查询导出任务状态、行数和失败分类 |
+| GET | `/audit/exports/:id/download` | 下载已生成的 CSV 文件 |
+
+审计导出 CSV 使用 UTF-8 BOM，表头固定为：`时间,操作人,动作,目标,来源地址,备注`。导出接口立即返回任务，后台分批读取数据；任务失败时返回 `error_category=permission|range|generation`，分别表示权限问题、筛选范围问题或文件生成问题。文件默认与数据库位于同一持久化目录下的 `audit-exports/`，保留 7 天。首个用户（ID=1）会在首次启动迁移后自动成为管理员。
 
 ### 上传
 
@@ -438,7 +444,7 @@ POST /api/v1/upload   Content-Type: multipart/form-data   Form-Field: file
 
 ## 数据库迁移说明
 
-默认使用 `GORM AutoMigrate` 在首次启动时建表，无需手动执行 SQL。若需纯 SQL 版本，`migrations/` 下提供了 6 个顺序脚本，可按需改造 PostgreSQL / MySQL。
+默认使用 `GORM AutoMigrate` 在首次启动时建表，无需手动执行 SQL。若需纯 SQL 版本，`migrations/` 下提供了 7 个顺序脚本，可按需改造 PostgreSQL / MySQL。
 
 ```
 migrations/
@@ -447,7 +453,8 @@ migrations/
   003_tutorials.sql
   004_steps_materials_tools.sql
   005_projects_comments_favorites_attempts.sql
-  006_follows_messages_notifications_audit.sql
+  006_follows_messages.sql
+  007_admin_audit_export.sql
 ```
 
 ## 启动命令（快速备忘）

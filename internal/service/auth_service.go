@@ -60,6 +60,12 @@ func (s *AuthService) Register(username, email, password string) (*domain.User, 
 	if err := s.userRepo.Create(u); err != nil {
 		return nil, err
 	}
+	if u.ID == 1 {
+		u.IsAdmin = true
+		if err := s.userRepo.Update(u); err != nil {
+			return nil, err
+		}
+	}
 	return u, nil
 }
 

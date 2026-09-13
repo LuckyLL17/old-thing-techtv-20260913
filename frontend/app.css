@@ -95,3 +95,20 @@ textarea{min-height:120px;resize:vertical}
 .pagination{display:flex;justify-content:center;gap:8px;margin:40px 0 20px}
 .page-btn{min-width:36px;height:36px;border-radius:8px;border:1px solid #dde0e6;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px}
 .page-btn-active{background:#7c5cff;color:#fff;border-color:#7c5cff}
+.audit-filter{padding:22px;margin-bottom:20px}
+.audit-actions{display:flex;gap:12px;align-items:center;margin-top:18px;flex-wrap:wrap}
+.audit-tip{color:#666;font-size:13px}
+.audit-summary{margin:6px 0 12px;font-size:14px;color:#555}
+.audit-filter-tags{display:flex;gap:8px;flex-wrap:wrap}
+.table-card{overflow-x:auto}
+.audit-table{width:100%;border-collapse:collapse;min-width:920px;font-size:13px}
+.audit-table th,.audit-table td{padding:12px 14px;text-align:left;border-bottom:1px solid #f0f0f0;vertical-align:top}
+.audit-table th{background:#faf8ff;color:#555;font-weight:700;white-space:nowrap}
+.audit-table tr:hover td{background:#fcfbff}
+.empty-cell{text-align:center;color:#999;padding:34px!important}
+.job-status{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;background:#eef0f4;color:#555}
+.job-status.success{background:#d3f9d8;color:#2b8a3e}
+.job-status.error{background:#ffe3e3;color:#c92a2a}
+.job-status.info,.job-status.warn{background:#fff3bf;color:#e67700}
+.muted{color:#999;font-size:13px}
+@media(max-width:640px){.audit-filter{padding:16px}.audit-actions .btn{width:100%}}

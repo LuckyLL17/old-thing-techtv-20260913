@@ -79,8 +79,12 @@ func main() {
 	versionRepo := repository.NewTutorialVersionRepo(db)
 	notifRepo := repository.NewNotificationRepo(db)
 	auditRepo := repository.NewAuditLogRepo(db)
+	auditExportRepo := repository.NewAuditExportRepo(db)
 	if err := categoryRepo.InitDefaults(); err != nil {
 		logger.Warnf("初始化分类失败: %v", err)
+	}
+	if err := bootstrapAdmin(db); err != nil {
+		logger.Warnf("初始化管理员失败: %v", err)
 	}
 	authSvc := service.NewAuthService(userRepo, &cfg.JWT)
 	tutorialSvc := service.NewTutorialService(tutorialRepo, stepRepo, materialRepo, tagRepo, categoryRepo, userRepo)
@@ -93,6 +97,7 @@ func main() {
 	interactSvc := service.NewInteractionService(commentRepo, favoriteRepo, attemptRepo, followRepo, messageRepo, tutorialRepo, projectRepo)
 	notifSvc := service.NewNotificationService(notifRepo)
 	auditSvc := service.NewAuditService(auditRepo)
+	auditExportSvc := service.NewAuditExportService(auditExportRepo, auditRepo, auditExportDir(cfg.DB.DSN))
 	historySvc := service.NewTutorialHistoryService(versionRepo, tutorialRepo, stepRepo, materialRepo, toolRepo)
 	updater := worker.NewStatsUpdater(userRepo, tutorialRepo, commentRepo, categoryRepo, tagRepo)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -103,7 +108,7 @@ func main() {
 		ProjectSvc: projectSvc, CategorySvc: categorySvc, TagSvc: tagSvc,
 		SearchSvc: searchSvc, RecommendSvc: recommendSvc,
 		StatsSvc: statsSvc, InteractSvc: interactSvc,
-		NotifSvc: notifSvc, AuditSvc: auditSvc, HistorySvc: historySvc,
+		NotifSvc: notifSvc, AuditSvc: auditSvc, AuditExportSvc: auditExportSvc, HistorySvc: historySvc,
 		FrontendDir: frontendDir,
 	})
 	r.POST("/api/v1/upload", middleware.Auth(authSvc), api.UploadHandler(&cfg.Upload))
@@ -171,5 +176,24 @@ func autoMigrate(db *gorm.DB) error {
 		&domain.Message{},
 		&domain.Notification{},
 		&domain.AuditLog{},
+		&domain.AuditExport{},
 	)
+}
+
+func bootstrapAdmin(db *gorm.DB) error {
+	var count int64
+	if err := db.Model(&domain.User{}).Where("is_admin = ?", true).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	return db.Model(&domain.User{}).Where("id = ?", 1).Update("is_admin", true).Error
+}
+
+func auditExportDir(dbDSN string) string {
+	if dbDSN == "" || dbDSN == ":memory:" {
+		return filepath.Join("data", "audit-exports")
+	}
+	return filepath.Join(filepath.Dir(dbDSN), "audit-exports")
 }
