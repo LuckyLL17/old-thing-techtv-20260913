@@ -1,0 +1,20 @@
+-- V1: create users table
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username VARCHAR(50) NOT NULL UNIQUE,
+  email VARCHAR(100) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  avatar VARCHAR(255),
+  nickname VARCHAR(50),
+  specialty VARCHAR(255),
+  bio TEXT,
+  level VARCHAR(20) NOT NULL DEFAULT 'novice',
+  tutorial_count INTEGER NOT NULL DEFAULT 0,
+  project_count INTEGER NOT NULL DEFAULT 0,
+  score INTEGER NOT NULL DEFAULT 0,
+  status INTEGER NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_users_level ON users(level);
+CREATE INDEX IF NOT EXISTS idx_users_score ON users(score DESC);

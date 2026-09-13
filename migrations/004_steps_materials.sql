@@ -1,0 +1,28 @@
+-- V4: steps, materials
+CREATE TABLE IF NOT EXISTS steps (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tutorial_id INTEGER NOT NULL,
+  step_order INTEGER NOT NULL DEFAULT 0,
+  title VARCHAR(200),
+  content TEXT NOT NULL,
+  image VARCHAR(255),
+  reminder VARCHAR(500),
+  estimated_minutes INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_steps_tid ON steps(tutorial_id);
+CREATE INDEX IF NOT EXISTS idx_steps_order ON steps(step_order);
+CREATE TABLE IF NOT EXISTS materials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tutorial_id INTEGER NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  quantity VARCHAR(50),
+  unit VARCHAR(20),
+  is_tool INTEGER NOT NULL DEFAULT 0,
+  notes VARCHAR(255),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_materials_tid ON materials(tutorial_id);
