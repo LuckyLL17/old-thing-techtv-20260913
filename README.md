@@ -315,7 +315,7 @@ admin:
 | GET  | `/tutorials` | 列表：支持分类/难度/排序/标签筛选、分页（公开仅已发布；作者带 token 查 `user_id=自己` 可见全部状态） | 可选 |
 | GET  | `/tutorials/:id` | 详情：步骤+材料+工具+评论计数（非公开教程仅作者/管理员可见） | 可选 |
 | POST | `/tutorials` | 发布教程，含 `steps/materials/tools/tags`；`status=published` 会进入待审队列而非直接公开 | 是 |
-| PUT  | `/tutorials/:id` | 更新（仅作者可改） | 是 |
+| PUT  | `/tutorials/:id` | 更新（仅作者可改）；`status` 置空表示不改变状态，已发布教程保存修改后保持已发布不下架，草稿/驳回传 `published` 进入待审 | 是 |
 | DELETE | `/tutorials/:id` | 删除（软删，仅作者/管理员） | 是 |
 | POST | `/tutorials/:id/submit` | 将草稿/被驳回的教程提交审核（状态 → `pending`） | 是（作者） |
 | POST | `/tutorials/:id/reorder` | 拖拽重排步骤顺序 | 是 |

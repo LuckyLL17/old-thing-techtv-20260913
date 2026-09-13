@@ -1,7 +1,7 @@
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const API = '/api/v1';
-const state = { token: localStorage.getItem('token') || '', user: null, page: 1, size: 12 };
+const state = { token: localStorage.getItem('token') || '', user: null, page: 1, size: 12, editId: null };
 
 function headers(auth = true) {
   const h = { 'Content-Type': 'application/json' };
@@ -200,9 +200,12 @@ async function viewTutorial(id) {
   const user = t.user || {};
   const cat = t.category || {};
   let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/tutorials">教程</a> / <span>${t.title}</span></div>`;
+  const isOwner = state.user && state.user.id === t.user_id;
+  if (isOwner) {
+    h += `<div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px"><button class="btn btn-outline" onclick="location.hash='#/editor/${t.id}'">✏️ 编辑</button>${(t.status==='draft'||t.status==='rejected')?`<button class="btn btn-solid" onclick="submitTutorial(${t.id})">🚀 提交审核</button>`:''}</div>`;
+  }
   if (t.status && t.status !== 'published') {
-    const isOwner = state.user && state.user.id === t.user_id;
-    h += `<div class="card" style="padding:14px 18px;margin-bottom:16px"><div class="flex" style="flex-wrap:wrap">${statusBadge(t.status)}<span style="color:#888;font-size:13px">${t.status==='pending'?'教程正在审核中，通过后才会公开展示':t.status==='rejected'?'教程未通过审核，修改后可重新提交':t.status==='draft'?'草稿尚未提交审核':'教程已归档，不再公开展示'}</span>${isOwner&&(t.status==='rejected'||t.status==='draft')?`<button class="btn btn-solid" style="margin-left:auto" onclick="submitTutorial(${t.id})">🚀 提交审核</button>`:''}</div>${t.status==='rejected'&&t.review_note?`<div class="review-note">驳回原因：${t.review_note}</div>`:''}</div>`;
+    h += `<div class="card" style="padding:14px 18px;margin-bottom:16px"><div class="flex" style="flex-wrap:wrap">${statusBadge(t.status)}<span style="color:#888;font-size:13px">${t.status==='pending'?'教程正在审核中，通过后才会公开展示':t.status==='rejected'?'教程未通过审核，修改后可重新提交':t.status==='draft'?'草稿尚未提交审核':'教程已归档，不再公开展示'}</span></div>${t.status==='rejected'&&t.review_note?`<div class="review-note">驳回原因：${t.review_note}</div>`:''}</div>`;
   }
   h += `<div style="display:flex;gap:10px;margin-bottom:10px;align-items:center">${difficultyBadge(t.difficulty)}<span style="color:#888">⏱ ${t.estimated_hours} 小时</span><span>${(t.tags||[]).map(x=>`<span class="tag">#${x.name}</span>`).join('')}</span></div>`;
   h += `<h1 style="font-size:30px;margin-bottom:12px">${t.title}</h1>`;
@@ -337,7 +340,7 @@ async function viewMe() {
   h += `<div class="tabs"><div class="tab tab-active">📚 我的教程</div><div class="tab" onclick="location.hash='#/me/projects'">🎨 我的作品</div><div class="tab" onclick="location.hash='#/me/favorites'">⭐ 我的收藏</div><div class="tab" onclick="location.hash='#/me/attempts'">🛠 我的尝试</div><div class="tab" onclick="location.hash='#/me/notifications'">🔔 通知</div><div class="tab" onclick="location.hash='#/me/messages'">✉️ 消息</div></div>`;
   const tuts = await get('/tutorials?user_id=' + u.id + '&size=50');
   if (tuts.data && tuts.data.list && tuts.data.list.length) {
-    h += `<div class="grid grid-2">` + tuts.data.list.map(t => `<div class="card" style="padding:16px"><div class="flex-between" style="margin-bottom:6px"><b style="cursor:pointer" onclick="location.hash='#/tutorials/${t.id}'">${t.title}</b>${statusBadge(t.status)}</div><div style="font-size:12px;color:#888">${timeAgo(t.created_at)} · 👁${t.view_count} ❤️${t.favorite_count}</div>${t.status==='rejected'&&t.review_note?`<div class="review-note">驳回原因：${t.review_note}</div>`:''}${t.status==='pending'?`<div style="margin-top:8px;font-size:13px;color:#e67700">⏳ 已提交，等待管理员审核…</div>`:''}<div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-outline" onclick="location.hash='#/tutorials/${t.id}'">查看</button>${(t.status==='draft'||t.status==='rejected')?`<button class="btn btn-solid" onclick="submitTutorial(${t.id})">🚀 提交审核</button>`:''}</div></div>`).join('') + `</div>`;
+    h += `<div class="grid grid-2">` + tuts.data.list.map(t => `<div class="card" style="padding:16px"><div class="flex-between" style="margin-bottom:6px"><b style="cursor:pointer" onclick="location.hash='#/tutorials/${t.id}'">${t.title}</b>${statusBadge(t.status)}</div><div style="font-size:12px;color:#888">${timeAgo(t.created_at)} · 👁${t.view_count} ❤️${t.favorite_count}</div>${t.status==='rejected'&&t.review_note?`<div class="review-note">驳回原因：${t.review_note}</div>`:''}${t.status==='pending'?`<div style="margin-top:8px;font-size:13px;color:#e67700">⏳ 已提交，等待管理员审核…</div>`:''}<div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-outline" onclick="location.hash='#/tutorials/${t.id}'">查看</button><button class="btn btn-outline" onclick="location.hash='#/editor/${t.id}'">✏️ 编辑</button>${(t.status==='draft'||t.status==='rejected')?`<button class="btn btn-solid" onclick="submitTutorial(${t.id})">🚀 提交审核</button>`:''}</div></div>`).join('') + `</div>`;
   } else {
     h += `<div class="empty">还没有发布教程 <a href="#/editor" class="btn btn-solid">现在发布</a></div>`;
   }
@@ -361,19 +364,52 @@ function editProfile() {
     toast('已更新', 'success'); state.user = null; ensureUser(); m.remove(); route();
   };
 }
-async function editorView() {
+async function editorView(editId) {
   if (!requireLogin()) return;
+  state.editId = null;
   const cats = (await get('/categories', false)).data || [];
-  let h = `<div class="bread"><a href="#/">首页</a> / 发布教程</div><h1 style="font-size:26px;margin-bottom:18px">✏️ 教程编辑器</h1>`;
+  let t = null;
+  if (editId) {
+    const r = await get('/tutorials/' + editId);
+    if (!r.success) { $('#app').innerHTML = `<div class="empty">${r.message}</div>`; return; }
+    t = r.data.tutorial;
+    if (!state.user || state.user.id !== t.user_id) { $('#app').innerHTML = `<div class="empty">无权编辑此教程</div>`; return; }
+    state.editId = t.id;
+  }
+  let h = `<div class="bread"><a href="#/">首页</a> / ${t ? '编辑教程' : '发布教程'}</div><h1 style="font-size:26px;margin-bottom:18px">${t ? '✏️ 编辑教程' : '✏️ 教程编辑器'}</h1>`;
+  if (t) h += `<div style="margin-bottom:14px">${statusBadge(t.status)}${t.status === 'rejected' && t.review_note ? `<div class="review-note">驳回原因：${t.review_note}</div>` : ''}</div>`;
   h += `<div class="card" style="padding:24px"><div class="form-grid"><div><label class="label">教程标题 *</label><input class="input" id="e_title" placeholder="比如：旧牛仔裤改造时尚背包"></div><div><label class="label">分类 *</label><select class="input" id="e_cat">${cats.map(c=>`<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}</select></div><div><label class="label">难度</label><select class="input" id="e_diff"><option value="easy">简单</option><option value="medium" selected>中等</option><option value="hard">困难</option></select></div><div><label class="label">预计耗时（小时）</label><input class="input" type="number" id="e_hours" value="2" step="0.5" min="0.1"></div><div style="grid-column:1/-1"><label class="label">标签（逗号分隔，如：复古,收纳,极简）</label><input class="input" id="e_tags" placeholder="复古,收纳,极简"></div></div>`;
   h += `<label class="label">简介</label><textarea class="input" id="e_sum" placeholder="简要描述改造思路和亮点..."></textarea>`;
   h += `<div class="form-grid"><div><label class="label">改造前图片URL *</label><input class="input" id="e_cb" placeholder="https://... 或 /uploads/xxx.jpg"></div><div><label class="label">改造后图片URL *</label><input class="input" id="e_ca" placeholder="改造完成后的效果"></div></div>`;
   h += `<div class="section-title">📦 材料清单</div><div id="mat_list"></div><button class="btn btn-gray" onclick="addMat()">+ 添加材料</button>`;
   h += `<div class="section-title">🔨 工具清单</div><div id="tool_list"></div><button class="btn btn-gray" onclick="addTool()">+ 添加工具</button>`;
   h += `<div class="section-title">📖 步骤说明 <small style="font-size:13px;color:#888">拖拽排序</small></div><div id="step_list"></div><button class="btn btn-gray" onclick="addStep()">+ 添加步骤</button>`;
-  h += `<div style="margin-top:30px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-gray" onclick="saveTutorial(false)">保存草稿</button><button class="btn btn-solid btn-lg" onclick="saveTutorial(true)">🚀 提交审核</button></div><p style="text-align:right;color:#999;font-size:12px;margin-top:8px">提交后教程进入审核队列，管理员审核通过后才会公开展示</p></div>`;
+  if (t) {
+    h += `<div style="margin-top:30px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-gray" onclick="saveTutorial(false)">保存修改</button>${t.status !== 'published' ? `<button class="btn btn-solid btn-lg" onclick="saveTutorial(true)">🚀 保存并提交审核</button>` : ''}</div><p style="text-align:right;color:#999;font-size:12px;margin-top:8px">${t.status === 'published' ? '教程已发布，保存修改后仍保持公开' : '保存修改不改变当前状态；提交审核后进入待审队列'}</p></div>`;
+  } else {
+    h += `<div style="margin-top:30px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-gray" onclick="saveTutorial(false)">保存草稿</button><button class="btn btn-solid btn-lg" onclick="saveTutorial(true)">🚀 提交审核</button></div><p style="text-align:right;color:#999;font-size:12px;margin-top:8px">提交后教程进入审核队列，管理员审核通过后才会公开展示</p></div>`;
+  }
   $('#app').innerHTML = h;
-  addMat(); addTool(); addStep();
+  if (t) {
+    $('#e_title').value = t.title || '';
+    $('#e_cat').value = String(t.category_id);
+    $('#e_diff').value = t.difficulty || 'medium';
+    $('#e_hours').value = t.estimated_hours || 1;
+    $('#e_tags').value = (t.tags || []).map(x => x.name).join(',');
+    $('#e_sum').value = t.summary || '';
+    $('#e_cb').value = t.cover_before || '';
+    $('#e_ca').value = t.cover_after || '';
+    const mats = (t.materials || []).filter(m => !m.is_tool);
+    const tools = (t.materials || []).filter(m => m.is_tool);
+    if (!mats.length) addMat();
+    mats.forEach(m => { addMat(); const row = $('#mat_list').lastElementChild; row.querySelector('.m-name').value = m.name || ''; row.querySelector('.m-qty').value = m.quantity || ''; row.querySelector('.m-unit').value = m.unit || ''; });
+    if (!tools.length) addTool();
+    tools.forEach(m => { addTool(); const row = $('#tool_list').lastElementChild; row.querySelector('.t-name').value = m.name || ''; row.querySelector('.t-notes').value = m.notes || ''; });
+    if (!(t.steps || []).length) addStep();
+    (t.steps || []).forEach(s => { addStep(); const row = $('#step_list').lastElementChild; row.querySelector('.s-title').value = s.title || ''; row.querySelector('.s-content').value = s.content || ''; row.querySelector('.s-image').value = s.image || ''; row.querySelector('.s-remind').value = s.reminder || ''; row.querySelector('.s-time').value = s.estimated_minutes || 0; });
+  } else {
+    addMat(); addTool(); addStep();
+  }
 }
 function addMat() {
   const div = el('div', 'mat-item');
@@ -396,6 +432,7 @@ function renumSteps() {
   $$('#step_list .step-index').forEach((el, i) => el.textContent = i + 1);
 }
 async function saveTutorial(publish) {
+  const editId = state.editId;
   const title = $('#e_title').value.trim();
   const cb = $('#e_cb').value.trim(); const ca = $('#e_ca').value.trim();
   if (!title || !cb || !ca) return toast('请填写必填项：标题 + 改造前后图片', 'error');
@@ -407,14 +444,16 @@ async function saveTutorial(publish) {
     category_id: parseInt($('#e_cat').value), title, summary: $('#e_sum').value,
     cover_before: cb, cover_after: ca, difficulty: $('#e_diff').value,
     estimated_hours: parseFloat($('#e_hours').value)||1,
-    status: publish ? 'published' : 'draft',
+    // 编辑保存不改变当前状态（空值）；提交审核由后端按当前状态流转
+    status: publish ? 'published' : (editId ? '' : 'draft'),
     tags: ($('#e_tags').value.split(/[,，]/).map(x=>x.trim()).filter(Boolean)),
     materials, tools, steps
   };
-  const r = await post('/tutorials', body);
+  const r = editId ? await post('/tutorials/' + editId, body, true, 'PUT') : await post('/tutorials', body);
   if (!r.success) return toast(r.message, 'error');
-  toast(publish ? '已提交审核，通过后将公开展示 🎉' : '草稿已保存', 'success');
-  location.hash = '#/tutorials/' + r.data.id;
+  state.editId = null;
+  toast(publish ? '已提交审核，通过后将公开展示 🎉' : (editId ? '修改已保存' : '草稿已保存'), 'success');
+  location.hash = '#/tutorials/' + (editId || r.data.id);
 }
 async function viewMessages() {
   if (!requireLogin()) return;
@@ -544,7 +583,7 @@ async function route() {
         break;
       }
       case 'stats': viewStats(); break;
-      case 'editor': editorView(); break;
+      case 'editor': editorView(parts[1]); break;
       case 'random': viewRandom(); break;
       case 'admin': viewAdmin(); break;
       case 'me': {

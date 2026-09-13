@@ -135,7 +135,7 @@ func (s *TutorialService) Update(id, userID uint64, r *TutorialCreateReq) (*doma
 		t.EstimatedHours = r.EstimatedHours
 	}
 	if r.Status != "" {
-		t.Status = normalizeStatus(r.Status)
+		t.Status = resolveAuthorStatus(t.Status, r.Status)
 	}
 	if r.CategoryID > 0 {
 		t.CategoryID = r.CategoryID
@@ -269,4 +269,26 @@ func normalizeStatus(s string) string {
 		return domain.TutorialStatusPending
 	}
 	return domain.TutorialStatusDraft
+}
+
+// resolveAuthorStatus 计算作者编辑已有教程时的状态流转：
+//   - 发布意图（published/pending）：草稿/驳回/归档进入待审；已发布或待审保持不变
+//   - 草稿/归档：按请求切换（已发布转草稿/归档即下架，计数由调用方处理）
+//   - 其余非法值：保持当前状态
+//
+// 关键约束：已发布教程保存修改后仍为已发布，不会被改回待审而下架。
+func resolveAuthorStatus(current, requested string) string {
+	switch requested {
+	case domain.TutorialStatusPublished, domain.TutorialStatusPending:
+		switch current {
+		case domain.TutorialStatusPublished, domain.TutorialStatusPending:
+			return current
+		}
+		return domain.TutorialStatusPending
+	case domain.TutorialStatusDraft:
+		return domain.TutorialStatusDraft
+	case domain.TutorialStatusArchived:
+		return domain.TutorialStatusArchived
+	}
+	return current
 }
