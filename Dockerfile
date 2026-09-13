@@ -1,9 +1,9 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.27-alpine AS builder
 RUN apk add --no-cache git build-base
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
-    go env -w GOPROXY=https://proxy.golang.org,direct && go mod download
+    go env -w GOPROXY=https://goproxy.cn,https://proxy.golang.org,direct && go mod download
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/upcycle-hub ./cmd/server
