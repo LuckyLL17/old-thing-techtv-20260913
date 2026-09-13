@@ -79,6 +79,7 @@ func main() {
 	versionRepo := repository.NewTutorialVersionRepo(db)
 	notifRepo := repository.NewNotificationRepo(db)
 	auditRepo := repository.NewAuditLogRepo(db)
+	topicRepo := repository.NewTopicRepo(db)
 	if err := categoryRepo.InitDefaults(); err != nil {
 		logger.Warnf("初始化分类失败: %v", err)
 	}
@@ -94,6 +95,7 @@ func main() {
 	notifSvc := service.NewNotificationService(notifRepo)
 	auditSvc := service.NewAuditService(auditRepo)
 	historySvc := service.NewTutorialHistoryService(versionRepo, tutorialRepo, stepRepo, materialRepo, toolRepo)
+	topicSvc := service.NewTopicService(topicRepo)
 	updater := worker.NewStatsUpdater(userRepo, tutorialRepo, commentRepo, categoryRepo, tagRepo)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -104,6 +106,7 @@ func main() {
 		SearchSvc: searchSvc, RecommendSvc: recommendSvc,
 		StatsSvc: statsSvc, InteractSvc: interactSvc,
 		NotifSvc: notifSvc, AuditSvc: auditSvc, HistorySvc: historySvc,
+		TopicSvc: topicSvc,
 		FrontendDir: frontendDir,
 	})
 	r.POST("/api/v1/upload", middleware.Auth(authSvc), api.UploadHandler(&cfg.Upload))
@@ -171,5 +174,7 @@ func autoMigrate(db *gorm.DB) error {
 		&domain.Message{},
 		&domain.Notification{},
 		&domain.AuditLog{},
+		&domain.Topic{},
+		&domain.TopicItem{},
 	)
 }

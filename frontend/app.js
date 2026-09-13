@@ -72,7 +72,7 @@ function renderUserArea() {
     return;
   }
   const u = state.user;
-  area.innerHTML = `<div class="user-menu">${avatarFor(u)}<span>${u.nickname||u.username}</span><div class="dropdown" id="ud" style="display:none"><a href="#/me">个人中心</a><a href="#/editor">发布教程</a><a href="#/me/projects">我的作品</a><a href="javascript:logout()">退出登录</a></div></div>`;
+  area.innerHTML = `<div class="user-menu">${avatarFor(u)}<span>${u.nickname||u.username}</span><div class="dropdown" id="ud" style="display:none"><a href="#/me">个人中心</a><a href="#/editor">发布教程</a><a href="#/me/projects">我的作品</a><a href="#/admin/topics">专题管理</a><a href="javascript:logout()">退出登录</a></div></div>`;
   area.querySelector('.user-menu').onclick = e => { e.stopPropagation(); const d = $('#ud'); d.style.display = d.style.display === 'none' ? 'block' : 'none'; };
   document.body.onclick = () => { const d = $('#ud'); if (d) d.style.display = 'none'; };
 }
@@ -444,6 +444,120 @@ async function viewRandom() {
   h += `<div class="grid grid-4">${renderTutorialCards(r.data||[])}</div>`;
   $('#app').innerHTML = h;
 }
+async function viewTopics() {
+  const r = await get('/topics?page=' + state.page + '&size=12', false);
+  if (!r.success) { $('#app').innerHTML = `<div class="empty">${r.message}</div>`; return; }
+  let h = `<div class="bread"><a href="#/">首页</a> / 专题</div>`;
+  h += `<h1 style="font-size:26px;margin-bottom:14px">🧵 精选专题</h1>`;
+  const list = r.data.list || [];
+  if (!list.length) {
+    h += `<div class="empty"><div class="empty-icon">🗂</div>暂无专题，敬请期待</div>`;
+  } else {
+    h += `<div class="grid grid-3">` + list.map(t => `<div class="card" onclick="location.hash='#/topics/${t.id}'"><img src="${t.cover||'https://picsum.photos/seed/topic'+t.id+'/600/300'}" onerror="this.src='https://picsum.photos/seed/topic'+${t.id}+'/600/300'" style="height:180px"><div class="card-body"><div class="card-title">${t.title}</div><div style="font-size:13px;color:#888;margin-top:6px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${t.summary||''}</div><div style="font-size:12px;color:#7c5cff;margin-top:10px">📦 ${t.item_count||0} 个内容 · ${timeAgo(t.updated_at)}更新</div></div></div>`).join('') + `</div>`;
+  }
+  h += pagination(r.data.total, r.data.page, r.data.size);
+  $('#app').innerHTML = h;
+}
+function renderTopicItem(it) {
+  if (!it.available) {
+    return `<div class="card" style="opacity:.55"><div style="height:180px;display:flex;align-items:center;justify-content:center;background:#f1f2f4;color:#999;font-size:14px;border-radius:14px 14px 0 0">🗑 内容已下架或删除</div><div class="card-body"><div class="card-title" style="color:#999">${it.item_type==='tutorial'?'教程':'作品'} #${it.item_id}</div></div></div>`;
+  }
+  if (it.item_type === 'tutorial') return renderTutorialCards([it.tutorial]);
+  return renderProjectCards([it.project]);
+}
+async function viewTopic(id) {
+  const r = await get('/topics/' + id + '?page=' + state.page + '&size=9', false);
+  if (!r.success) { $('#app').innerHTML = `<div class="empty">${r.message}</div>`; return; }
+  const t = r.data.topic;
+  const items = r.data.items;
+  let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/topics">专题</a> / <span>${t.title}</span></div>`;
+  h += `<div class="card" style="padding:0;overflow:hidden;margin-bottom:24px"><img src="${t.cover||'https://picsum.photos/seed/topic'+t.id+'/1200/360'}" onerror="this.src='https://picsum.photos/seed/topic'+${t.id}+'/1200/360'" style="width:100%;height:260px;object-fit:cover"><div style="padding:24px"><h1 style="font-size:28px;margin-bottom:10px">🧵 ${t.title}</h1><p style="color:#555">${t.summary||''}</p><div style="font-size:12px;color:#888;margin-top:12px">共 ${items.total} 个内容 · 按收录顺序展示</div></div></div>`;
+  const list = items.list || [];
+  if (!list.length) {
+    h += `<div class="empty"><div class="empty-icon">📭</div>专题正在筹备中，敬请期待</div>`;
+  } else {
+    h += `<div class="grid grid-3">` + list.map(renderTopicItem).join('') + `</div>`;
+  }
+  h += pagination(items.total, items.page, items.size);
+  $('#app').innerHTML = h;
+}
+async function viewAdminTopics() {
+  if (!requireLogin()) return;
+  const r = await get('/admin/topics?page=' + state.page + '&size=20');
+  if (!r.success) { $('#app').innerHTML = `<div class="empty">${r.message}</div>`; return; }
+  let h = `<div class="bread"><a href="#/">首页</a> / 专题管理</div>`;
+  h += `<div class="flex-between" style="margin-bottom:18px"><h1 style="font-size:26px">🧵 专题管理</h1><button class="btn btn-solid" onclick="editTopic()">+ 新建专题</button></div>`;
+  const list = r.data.list || [];
+  state._topics = {};
+  list.forEach(t => state._topics[t.id] = t);
+  if (!list.length) {
+    h += `<div class="empty">还没有专题，点击右上角创建第一个吧</div>`;
+  } else {
+    h += `<div class="card" style="padding:8px">` + list.map(t => `<div class="flex-between" style="padding:14px 16px;border-bottom:1px solid #f0f0f0"><div class="flex" style="gap:14px"><img src="${t.cover||'https://picsum.photos/seed/topic'+t.id+'/120'}" onerror="this.src='https://picsum.photos/seed/topic'+${t.id}+'/120'" style="width:64px;height:64px;border-radius:10px;object-fit:cover"><div><div style="font-weight:600">${t.title} ${t.status===1?'<span class="tag" style="color:#2b8a3e">已上线</span>':'<span class="tag" style="color:#c92a2a">已下架</span>'}</div><div style="font-size:12px;color:#888;margin-top:4px">${t.summary||''} · 📦 ${t.item_count||0} 个内容</div></div></div><div class="flex"><a class="btn btn-ghost" href="#/topics/${t.id}">预览</a><button class="btn btn-gray" onclick="location.hash='#/admin/topics/${t.id}/items'">管理条目</button><button class="btn btn-gray" onclick="editTopic(state._topics[${t.id}])">编辑</button><button class="btn ${t.status===1?'btn-gray':'btn-solid'}" onclick="toggleTopic(${t.id},${t.status===1?0:1})">${t.status===1?'下架':'上线'}</button><button class="btn btn-danger" onclick="delTopic(${t.id},'${(t.title||'').replace(/'/g,'')}')">删除</button></div></div>`).join('') + `</div>`;
+  }
+  h += pagination(r.data.total, r.data.page, r.data.size);
+  $('#app').innerHTML = h;
+}
+function editTopic(t) {
+  t = t || {};
+  const esc = s => (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  const m = el('div', 'modal-bg');
+  m.innerHTML = `<div class="modal" style="max-width:520px"><h3>${t.id?'编辑专题':'新建专题'}</h3><label class="label">标题 *</label><input class="input" id="tp_title" value="${esc(t.title)}" placeholder="比如：阳台种植改造"><label class="label">简介</label><textarea class="input" id="tp_sum" placeholder="专题简介，展示在封面下方">${esc(t.summary)}</textarea><label class="label">封面图URL</label><input class="input" id="tp_cover" value="${esc(t.cover)}" placeholder="https://... 或 /uploads/xxx.jpg"><div class="modal-actions"><button class="btn btn-gray" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-solid" id="tp_sb">保存</button></div></div>`;
+  m.onclick = e => { if (e.target === m) m.remove(); };
+  document.body.appendChild(m);
+  $('#tp_sb').onclick = async () => {
+    const body = { title: $('#tp_title').value.trim(), summary: $('#tp_sum').value.trim(), cover: $('#tp_cover').value.trim() };
+    if (!body.title) return toast('请填写专题标题', 'error');
+    const r = t.id ? await post('/admin/topics/' + t.id, body, true, 'PUT') : await post('/admin/topics', body);
+    if (!r.success) return toast(r.message, 'error');
+    toast('已保存', 'success'); m.remove(); route();
+  };
+}
+async function toggleTopic(id, status) {
+  const r = await post('/admin/topics/' + id, { status }, true, 'PUT');
+  if (!r.success) return toast(r.message, 'error');
+  toast(status === 1 ? '已上线' : '已下架', 'success'); route();
+}
+async function delTopic(id, title) {
+  if (!confirm(`确定删除专题「${title}」？条目关联会一并移除，教程/作品本身不受影响。`)) return;
+  const r = await post('/admin/topics/' + id, null, true, 'DELETE');
+  if (!r.success) return toast(r.message, 'error');
+  toast('已删除', 'success'); route();
+}
+async function viewAdminTopicItems(id) {
+  if (!requireLogin()) return;
+  const tr = await get('/admin/topics/' + id + '/items?page=' + state.page + '&size=20');
+  if (!tr.success) { $('#app').innerHTML = `<div class="empty">${tr.message}</div>`; return; }
+  let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/admin/topics">专题管理</a> / 条目管理</div>`;
+  h += `<h1 style="font-size:26px;margin-bottom:18px">📦 管理专题条目</h1>`;
+  h += `<div class="card" style="padding:20px;margin-bottom:20px"><div class="flex" style="gap:10px;align-items:flex-end"><div><label class="label">类型</label><select class="input" id="ai_type" style="width:140px"><option value="tutorial">教程</option><option value="project">作品</option></select></div><div style="flex:1"><label class="label">内容ID</label><input class="input" id="ai_id" type="number" min="1" placeholder="输入教程或作品的ID"></div><button class="btn btn-solid" onclick="addTopicItem(${id})">+ 添加</button></div><div style="font-size:12px;color:#888;margin-top:8px">同一内容重复添加只会保留一次；新条目排在最后，前台按添加顺序展示。</div></div>`;
+  const list = tr.data.list || [];
+  if (!list.length) {
+    h += `<div class="empty">还没有条目，先添加一些内容吧</div>`;
+  } else {
+    h += `<div class="card" style="padding:8px">` + list.map((it, i) => {
+      const target = it.tutorial || it.project || {};
+      const title = it.available ? (target.title || '未命名') : '内容已下架或删除';
+      const link = it.item_type === 'tutorial' ? `#/tutorials/${it.item_id}` : `#/projects/${it.item_id}`;
+      return `<div class="flex-between" style="padding:12px 16px;border-bottom:1px solid #f0f0f0;${it.available?'':'opacity:.55'}"><div class="flex" style="gap:14px"><div style="font-weight:700;color:#aaa;width:24px">${i+1}</div><span class="tag">${it.item_type==='tutorial'?'教程':'作品'}</span><a href="${link}" style="font-weight:600">${title}</a><span style="font-size:12px;color:#888">#${it.item_id}</span></div><button class="btn btn-danger" onclick="removeTopicItem(${id},${it.id})">移除</button></div>`;
+    }).join('') + `</div>`;
+  }
+  h += pagination(tr.data.total, tr.data.page, tr.data.size);
+  $('#app').innerHTML = h;
+}
+async function addTopicItem(topicId) {
+  const itemType = $('#ai_type').value;
+  const itemId = parseInt($('#ai_id').value) || 0;
+  if (!itemId) return toast('请输入内容ID', 'error');
+  const r = await post('/admin/topics/' + topicId + '/items', { item_type: itemType, item_id: itemId });
+  if (!r.success) return toast(r.message, 'error');
+  toast(r.data.added ? '已添加' : '该内容已在专题中，无需重复添加', 'success'); route();
+}
+async function removeTopicItem(topicId, itemId) {
+  const r = await post('/admin/topics/' + topicId + '/items/' + itemId, null, true, 'DELETE');
+  if (!r.success) return toast(r.message, 'error');
+  toast('已移除', 'success'); route();
+}
 async function route() {
   const hash = location.hash.slice(1) || '/';
   const [path, query] = hash.split('?');
@@ -474,6 +588,19 @@ async function route() {
             editorProjectView();
           } else viewProjects();
         } else viewProject(parts[1]);
+        break;
+      }
+      case 'topics': {
+        if (parts[1] === undefined) viewTopics();
+        else viewTopic(parts[1]);
+        break;
+      }
+      case 'admin': {
+        if (parts[1] === 'topics') {
+          if (parts[2] === undefined) viewAdminTopics();
+          else if (parts[3] === 'items') viewAdminTopicItems(parts[2]);
+          else viewAdminTopics();
+        } else viewAdminTopics();
         break;
       }
       case 'stats': viewStats(); break;

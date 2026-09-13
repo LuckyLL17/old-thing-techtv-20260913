@@ -13,7 +13,8 @@
 | 5 | 互动社区 | 教程评论/回复、作品点赞收藏、用户关注与私信、通知中心（评论/回复/收藏/关注/尝试/作品/系统/审核结果） |
 | 6 | 发现推荐 | 分类浏览、难度筛选、最新/热门/最多尝试、热门标签云、随机灵感、关键词搜索 |
 | 7 | 个人中心 | 我发布的 / 收藏 / 尝试记录 / 作品 / 改造总计 / 站内通知 |
-| 8 | 统计看板 + 管理 | 平台总数、TOP10 热门教程、最活跃用户、分类占比、月度趋势、审计日志、管理员操作审计统计 |
+| 8 | 专题运营 | 管理端创建专题（标题/简介/封面）、按添加顺序收录教程或作品、条目去重、上下架；前台专题列表与详情分页浏览，条目下架/删除后页面仍可打开 |
+| 9 | 统计看板 + 管理 | 平台总数、TOP10 热门教程、最活跃用户、分类占比、月度趋势、审计日志、管理员操作审计统计 |
 
 ## 技术栈
 
@@ -37,8 +38,8 @@
 | 物理总代码行 | 5,971 行 |
 | 有效 Go 代码行（去空行/纯注释） | 5,410 行 |
 | 前端（HTML/CSS/JS） | 651 行 |
-| SQLite 迁移脚本 | 6 个 SQL |
-| 数据库表 | 16 张（users / categories / tags / tutorials / tutorial_versions / tutorial_tags / steps / materials / tools / projects / comments / favorites / attempts / follows / messages / notifications / audit_logs） |
+| SQLite 迁移脚本 | 7 个 SQL |
+| 数据库表 | 18 张（users / categories / tags / tutorials / tutorial_versions / tutorial_tags / steps / materials / tools / projects / comments / favorites / attempts / follows / messages / notifications / audit_logs / topics / topic_items） |
 
 ## 目录结构
 
@@ -333,6 +334,20 @@ rate:
 | POST | `/projects/:id/like` | 点赞 | 否 |
 | POST | `/projects/:id/comments` | 评论作品 | 是 |
 
+### 专题
+
+| 方法 | 路径 | 说明 | 鉴权 |
+|---|---|---|---|
+| GET  | `/topics` | 专题列表（仅上线），分页 | 否 |
+| GET  | `/topics/:id` | 专题详情 + 条目（按添加顺序分页；条目下架/删除时 `available=false`，页面正常返回） | 否 |
+| GET  | `/admin/topics` | 专题列表（含已下架） | 是 |
+| POST | `/admin/topics` | 创建专题 `{ title, summary, cover, status? }` | 是 |
+| PUT  | `/admin/topics/:id` | 更新标题/简介/封面/上下架 | 是 |
+| DELETE | `/admin/topics/:id` | 删除专题（连带移除条目关联，不影响教程/作品本身） | 是 |
+| GET  | `/admin/topics/:id/items` | 条目列表（不限专题状态） | 是 |
+| POST | `/admin/topics/:id/items` | 添加条目 `{ item_type, item_id }`（`item_type`: `tutorial`/`project`），重复添加幂等只保留一次 | 是 |
+| DELETE | `/admin/topics/:id/items/:itemId` | 移除条目 | 是 |
+
 ### 发现 / 统计
 
 | 方法 | 路径 | 说明 |
@@ -438,7 +453,7 @@ POST /api/v1/upload   Content-Type: multipart/form-data   Form-Field: file
 
 ## 数据库迁移说明
 
-默认使用 `GORM AutoMigrate` 在首次启动时建表，无需手动执行 SQL。若需纯 SQL 版本，`migrations/` 下提供了 6 个顺序脚本，可按需改造 PostgreSQL / MySQL。
+默认使用 `GORM AutoMigrate` 在首次启动时建表，无需手动执行 SQL。若需纯 SQL 版本，`migrations/` 下提供了 7 个顺序脚本，可按需改造 PostgreSQL / MySQL。
 
 ```
 migrations/
@@ -448,6 +463,7 @@ migrations/
   004_steps_materials_tools.sql
   005_projects_comments_favorites_attempts.sql
   006_follows_messages_notifications_audit.sql
+  007_topics.sql
 ```
 
 ## 启动命令（快速备忘）

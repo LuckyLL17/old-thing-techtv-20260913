@@ -29,6 +29,7 @@ type Deps struct {
 	NotifSvc       *service.NotificationService
 	AuditSvc       *service.AuditService
 	HistorySvc     *service.TutorialHistoryService
+	TopicSvc       *service.TopicService
 	FrontendDir    string
 }
 
@@ -48,6 +49,7 @@ func SetupRouter(d *Deps) *gin.Engine {
 	notifH := handler.NewNotificationHandler(d.NotifSvc)
 	auditH := handler.NewAuditHandler(d.AuditSvc)
 	histH := handler.NewTutorialHistoryHandler(d.HistorySvc)
+	topicH := handler.NewTopicHandler(d.TopicSvc)
 	api.GET("/home", searchH.Home)
 	api.GET("/random", searchH.Random)
 	api.GET("/top", searchH.Top)
@@ -92,6 +94,11 @@ func SetupRouter(d *Deps) *gin.Engine {
 		projs.GET("/:id/comments", projH.Comments)
 		projs.POST("/:id/comments", middleware.Auth(d.AuthSvc), projH.AddComment)
 	}
+	topics := api.Group("/topics")
+	{
+		topics.GET("", topicH.List)
+		topics.GET("/:id", topicH.Detail)
+	}
 	me := api.Group("/me", middleware.Auth(d.AuthSvc))
 	{
 		me.GET("/favorites", statsH.Favorites)
@@ -112,6 +119,13 @@ func SetupRouter(d *Deps) *gin.Engine {
 	{
 		admin.GET("/audit", auditH.List)
 		admin.GET("/audit/stats", auditH.Stats)
+		admin.GET("/topics", topicH.AdminList)
+		admin.POST("/topics", topicH.Create)
+		admin.PUT("/topics/:id", topicH.Update)
+		admin.DELETE("/topics/:id", topicH.Delete)
+		admin.GET("/topics/:id/items", topicH.AdminItems)
+		admin.POST("/topics/:id/items", topicH.AddItem)
+		admin.DELETE("/topics/:id/items/:itemId", topicH.RemoveItem)
 	}
 	api.GET("/users/:id/follow", middleware.OptionalAuth(d.AuthSvc), statsH.FollowInfo)
 	api.GET("/health", func(c *gin.Context) {
