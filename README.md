@@ -351,6 +351,7 @@ rate:
 |---|---|---|
 | GET  | `/favorites` | 我的收藏（支持 `type=tutorial|project`） |
 | POST | `/favorites` | `{ target_type, target_id }` 切换收藏 |
+| GET  | `/feed` | 关注动态：所关注作者的已发布教程与改造作品按时间混排分页；零关注时返回 `suggestions` 推荐作者 |
 | GET  | `/attempts` | 我的尝试列表 |
 | POST | `/follow` | `{ target_id }` 关注用户 |
 | DELETE | `/follow/:id` | 取消关注 |

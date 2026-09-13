@@ -137,6 +137,20 @@ func (r *TutorialRepo) IncCounts(id uint64, fav, attempt, comment, project int) 
 	return nil
 }
 
+func (r *TutorialRepo) ListPublishedByIDs(ids []uint64) ([]*domain.Tutorial, error) {
+	var list []*domain.Tutorial
+	if len(ids) == 0 {
+		return list, nil
+	}
+	err := r.db.Preload("User").Preload("Category").Preload("Tags").
+		Where("status = ? AND deleted_at IS NULL AND id IN ?", domain.TutorialStatusPublished, ids).
+		Find(&list).Error
+	if err != nil {
+		return nil, apperr.Wrap(apperr.CodeDB, "批量查询教程失败", err)
+	}
+	return list, nil
+}
+
 func (r *TutorialRepo) TopTutorials(n int) ([]*domain.Tutorial, error) {
 	var list []*domain.Tutorial
 	err := r.db.Preload("User").Preload("Category").Where("status = ?", domain.TutorialStatusPublished).

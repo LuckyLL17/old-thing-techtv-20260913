@@ -26,6 +26,7 @@ type Deps struct {
 	RecommendSvc   *service.RecommendService
 	StatsSvc       *service.StatsService
 	InteractSvc    *service.InteractionService
+	FeedSvc        *service.FeedService
 	NotifSvc       *service.NotificationService
 	AuditSvc       *service.AuditService
 	HistorySvc     *service.TutorialHistoryService
@@ -46,6 +47,7 @@ func SetupRouter(d *Deps) *gin.Engine {
 	searchH := handler.NewSearchHandler(d.SearchSvc, d.RecommendSvc)
 	statsH := handler.NewStatsHandler(d.StatsSvc, d.InteractSvc)
 	notifH := handler.NewNotificationHandler(d.NotifSvc)
+	feedH := handler.NewFeedHandler(d.FeedSvc)
 	auditH := handler.NewAuditHandler(d.AuditSvc)
 	histH := handler.NewTutorialHistoryHandler(d.HistorySvc)
 	api.GET("/home", searchH.Home)
@@ -97,6 +99,7 @@ func SetupRouter(d *Deps) *gin.Engine {
 		me.GET("/favorites", statsH.Favorites)
 		me.POST("/favorites", statsH.ToggleFavorite)
 		me.GET("/attempts", statsH.Attempts)
+		me.GET("/feed", feedH.Feed)
 		me.POST("/follow", statsH.Follow)
 		me.DELETE("/follow/:id", statsH.Unfollow)
 		me.POST("/messages", statsH.SendMessage)

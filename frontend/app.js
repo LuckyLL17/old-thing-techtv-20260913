@@ -444,6 +444,131 @@ async function viewRandom() {
   h += `<div class="grid grid-4">${renderTutorialCards(r.data||[])}</div>`;
   $('#app').innerHTML = h;
 }
+async function viewFeed() {
+  // 未登录：引导登录（不发请求，避免 401）
+  if (!state.user) {
+    $('#app').innerHTML = `<div class="feed-guide card">
+      <div class="feed-guide-icon">🔒</div>
+      <h2>登录后查看关注动态</h2>
+      <p>关注你喜欢的木工、布艺作者，他们发布的新教程和改造作品都会汇聚在这里，按时间排好等你来看。</p>
+      <div class="flex" style="justify-content:center;margin-top:18px">
+        <button class="btn btn-solid btn-lg" onclick="showLogin()">立即登录</button>
+        <button class="btn btn-outline btn-lg" onclick="showRegister()">注册新账号</button>
+      </div>
+      <div style="margin-top:18px"><a class="btn btn-gray" href="#/tutorials">先随便逛逛 →</a></div>
+    </div>`;
+    return;
+  }
+  const page = state.page || 1;
+  const r = await get('/me/feed?page=' + page + '&size=10');
+  if (!r.success) {
+    if (r.code === 40100) { state.token = ''; state.user = null; localStorage.removeItem('token'); renderUserArea(); viewFeed(); return; }
+    $('#app').innerHTML = `<div class="empty">${r.message}</div>`;
+    return;
+  }
+  const d = r.data;
+  let h = `<div class="bread"><a href="#/">首页</a> / 关注动态</div>`;
+  h += `<div class="flex-between" style="margin-bottom:18px"><h1 style="font-size:26px">🧶 关注动态</h1><span style="color:#888;font-size:13px">已关注 ${d.following_count} 位作者</span></div>`;
+
+  // 没有关注任何作者：发现作者引导
+  if (d.following_count === 0) {
+    const users = d.suggestions || [];
+    h += `<div class="feed-guide card" style="margin-bottom:24px">
+      <div class="feed-guide-icon">🧭</div>
+      <h2>还没有关注的作者</h2>
+      <p>关注木工、布艺等领域的创作者后，他们的最新教程与改造作品会自动汇聚到这里，再也不用逐个翻主页。</p>
+    </div>`;
+    if (users.length) {
+      h += `<div class="section-title">✨ 发现这些作者</div><div class="grid grid-4">${users.map(renderAuthorCard).join('')}</div>`;
+    } else {
+      h += `<div class="empty">站内暂时还没有可推荐的作者，先去<a href="#/tutorials">教程库</a>逛逛，在教程详情页关注作者吧~</div>`;
+    }
+    $('#app').innerHTML = h;
+    return;
+  }
+
+  if (!d.list || !d.list.length) {
+    h += `<div class="empty"><div class="empty-icon">🌤️</div>关注的作者最近还没有发布新内容<br><br><a href="#/tutorials" class="btn btn-solid">去教程库看看</a> <a href="#/projects" class="btn btn-outline">逛逛作品</a></div>`;
+    $('#app').innerHTML = h;
+    return;
+  }
+
+  h += `<div class="feed-list">${d.list.map(renderFeedItem).join('')}</div>`;
+  h += feedPager(d);
+  $('#app').innerHTML = h;
+}
+
+function renderAuthorCard(u) {
+  return `<div class="author-card card">
+    <a href="#/tutorials?user_id=${u.id}" class="author-card-main">
+      <div style="display:flex;justify-content:center">${avatarFor(u)}</div>
+      <div class="author-name">${u.nickname || u.username}</div>
+      <div class="author-level">[${levelLabel(u.level)}]</div>
+      ${u.specialty ? `<div class="author-specialty">🔧 ${u.specialty}</div>` : ''}
+      <div class="author-counts">📚 ${u.tutorial_count || 0} 教程 · 🎨 ${u.project_count || 0} 作品</div>
+    </a>
+    <button class="btn btn-solid author-follow" onclick="followAuthor(${u.id},this)">+ 关注</button>
+  </div>`;
+}
+
+async function followAuthor(id, btn) {
+  if (!requireLogin()) return;
+  const r = await post('/me/follow', { following_id: id });
+  if (!r.success) return toast(r.message, 'error');
+  toast('关注成功，新动态会出现在这里', 'success');
+  if (btn) { btn.textContent = '✓ 已关注'; btn.className = 'btn btn-gray author-follow'; btn.disabled = true; }
+  // 从零关注引导页关注后，稍作停留再进入动态
+  setTimeout(() => { if (location.hash.startsWith('#/feed')) { state.page = 1; route(); } }, 800);
+}
+
+function renderFeedItem(item) {
+  const time = item.created_at || '';
+  if (item.type === 'tutorial' && item.tutorial) {
+    const t = item.tutorial; const u = t.user || {};
+    return `<a class="feed-item card" href="#/tutorials/${t.id}">
+      <div class="feed-thumb"><img src="${t.cover_after || ''}" onerror="this.src='https://picsum.photos/seed/fa'+${t.id}+'/400'"></div>
+      <div class="feed-body">
+        <div class="flex" style="gap:8px;margin-bottom:6px"><span class="feed-badge feed-badge-tutorial">📚 教程</span>${difficultyBadge(t.difficulty)}</div>
+        <div class="feed-title">${t.title}</div>
+        <div class="feed-summary">${t.summary || '作者发布了一个新教程，点开看看吧~'}</div>
+        <div class="feed-author">${avatarFor(u)}<div><b>${u.nickname || u.username || '匿名'}</b><div class="feed-date">${timeAgo(time)} · ❤️ ${t.favorite_count} · 🛠 ${t.attempt_count}</div></div></div>
+      </div>
+    </a>`;
+  }
+  if (item.type === 'project' && item.project) {
+    const p = item.project; const u = p.user || {}; const tut = p.tutorial || {};
+    const img = (p.images || '').split(/[|,;]/)[0] || `https://picsum.photos/seed/fp${p.id}/400`;
+    return `<a class="feed-item card" href="#/projects/${p.id}">
+      <div class="feed-thumb"><img src="${img}" onerror="this.src='https://picsum.photos/seed/fp'+${p.id}+'/400'"></div>
+      <div class="feed-body">
+        <div class="flex" style="gap:8px;margin-bottom:6px"><span class="feed-badge feed-badge-project">🎨 改造作品</span>${stars(p.rating)}</div>
+        <div class="feed-title">${p.title || '未命名作品'}</div>
+        <div class="feed-summary">${p.description || (tut.title ? '复刻教程：' + tut.title : '作者分享了新的改造作品')}</div>
+        <div class="feed-author">${avatarFor(u)}<div><b>${u.nickname || u.username || '匿名'}</b><div class="feed-date">${timeAgo(time)} · 👍 ${p.like_count} · 💬 ${p.comment_count}</div></div></div>
+      </div>
+    </a>`;
+  }
+  return '';
+}
+
+function feedPager(d) {
+  const page = d.page || 1;
+  const btns = (page > 1) || d.has_more;
+  let h = '';
+  if (btns) {
+    h += `<div class="pagination">`;
+    if (page > 1) h += `<button class="page-btn" onclick="state.page=${page - 1};route()">‹ 上一页</button>`;
+    h += `<span class="page-info">第 ${page} 页</span>`;
+    if (d.has_more) h += `<button class="page-btn" onclick="state.page=${page + 1};route()">下一页 ›</button>`;
+    h += `</div>`;
+  }
+  // 仅在真正最后一页显示"已经到底"
+  if (!d.has_more) {
+    h += `<div class="feed-end">—— 已经到底啦 ——<div class="feed-end-sub">关注的作者新发布内容会出现在这里</div></div>`;
+  }
+  return h;
+}
+
 async function route() {
   const hash = location.hash.slice(1) || '/';
   const [path, query] = hash.split('?');
@@ -479,6 +604,7 @@ async function route() {
       case 'stats': viewStats(); break;
       case 'editor': editorView(); break;
       case 'random': viewRandom(); break;
+      case 'feed': viewFeed(); break;
       case 'me': {
         const sub = parts[1];
         if (sub === 'projects') viewProjects();

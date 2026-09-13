@@ -79,6 +79,20 @@ func (r *ProjectRepo) List(page, size int, tutorialID, userID uint64, sort strin
 	return list, total, nil
 }
 
+func (r *ProjectRepo) ListActiveByIDs(ids []uint64) ([]*domain.Project, error) {
+	var list []*domain.Project
+	if len(ids) == 0 {
+		return list, nil
+	}
+	err := r.db.Preload("User").Preload("Tutorial", "status = ?", domain.TutorialStatusPublished).
+		Where("status = 1 AND id IN ?", ids).
+		Find(&list).Error
+	if err != nil {
+		return nil, apperr.Wrap(apperr.CodeDB, "批量查询作品失败", err)
+	}
+	return list, nil
+}
+
 func (r *ProjectRepo) IncLike(id uint64, delta int) error {
 	err := r.db.Model(&domain.Project{}).Where("id = ?", id).
 		UpdateColumn("like_count", gorm.Expr("like_count + ?", delta)).Error

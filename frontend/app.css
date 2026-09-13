@@ -93,5 +93,34 @@ textarea{min-height:120px;resize:vertical}
 .pill{padding:6px 14px;border-radius:999px;background:#fff;border:1px solid #dde0e6;cursor:pointer;font-size:13px}
 .pill-active{background:#7c5cff;color:#fff;border-color:#7c5cff}
 .pagination{display:flex;justify-content:center;gap:8px;margin:40px 0 20px}
-.page-btn{min-width:36px;height:36px;border-radius:8px;border:1px solid #dde0e6;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px}
+.page-btn{min-width:36px;height:36px;border-radius:8px;border:1px solid #dde0e6;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;padding:0 14px}
 .page-btn-active{background:#7c5cff;color:#fff;border-color:#7c5cff}
+.page-btn:disabled{opacity:.5;cursor:not-allowed}
+.page-info{display:flex;align-items:center;color:#888;font-size:13px;padding:0 6px}
+.feed-guide{padding:48px 32px;text-align:center;max-width:640px;margin:24px auto}
+.feed-guide-icon{font-size:54px;margin-bottom:14px}
+.feed-guide h2{font-size:22px;margin-bottom:10px}
+.feed-guide p{color:#777;line-height:1.8}
+.feed-list{display:flex;flex-direction:column;gap:16px}
+.feed-item{display:flex;gap:0;overflow:hidden}
+.feed-thumb{width:240px;min-width:240px;background:#f0f0f0}
+.feed-thumb img{width:100%;height:100%;min-height:160px;max-height:200px;object-fit:cover}
+.feed-body{padding:18px 22px;flex:1;display:flex;flex-direction:column;min-width:0}
+.feed-badge{display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;width:fit-content}
+.feed-badge-tutorial{background:#f0edff;color:#7c5cff}
+.feed-badge-project{background:#e6fcf5;color:#0ca678}
+.feed-title{font-size:17px;font-weight:700;margin-bottom:6px}
+.feed-summary{color:#666;font-size:14px;line-height:1.6;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-bottom:auto}
+.feed-author{display:flex;gap:10px;align-items:center;margin-top:12px}
+.feed-author b{font-size:14px}
+.feed-date{font-size:12px;color:#999;margin-top:2px}
+.feed-end{text-align:center;color:#bbb;font-size:13px;padding:24px 0 8px;letter-spacing:1px}
+.feed-end-sub{margin-top:6px;color:#ccc;font-size:12px}
+.author-card{padding:20px 16px;text-align:center;display:flex;flex-direction:column;gap:12px}
+.author-card .avatar{width:56px;height:56px;font-size:20px;margin:0 auto}
+.author-name{font-weight:700;font-size:15px}
+.author-level{color:#7c5cff;font-size:12px}
+.author-specialty{color:#888;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.author-counts{color:#999;font-size:12px}
+.author-follow{width:100%}
+@media(max-width:640px){.feed-item{flex-direction:column}.feed-thumb{width:100%;min-width:0}.feed-thumb img{max-height:220px}}

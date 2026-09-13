@@ -74,6 +74,7 @@ func main() {
 	favoriteRepo := repository.NewFavoriteRepo(db)
 	attemptRepo := repository.NewAttemptRepo(db)
 	followRepo := repository.NewFollowRepo(db)
+	feedRepo := repository.NewFeedRepo(db)
 	messageRepo := repository.NewMessageRepo(db)
 	toolRepo := repository.NewToolRepo(db)
 	versionRepo := repository.NewTutorialVersionRepo(db)
@@ -91,6 +92,7 @@ func main() {
 	recommendSvc := service.NewRecommendService(tutorialRepo, tagRepo, categoryRepo)
 	statsSvc := service.NewStatsService(tutorialRepo, projectRepo, userRepo, categoryRepo, favoriteRepo, attemptRepo)
 	interactSvc := service.NewInteractionService(commentRepo, favoriteRepo, attemptRepo, followRepo, messageRepo, tutorialRepo, projectRepo)
+	feedSvc := service.NewFeedService(feedRepo, followRepo, tutorialRepo, projectRepo, userRepo)
 	notifSvc := service.NewNotificationService(notifRepo)
 	auditSvc := service.NewAuditService(auditRepo)
 	historySvc := service.NewTutorialHistoryService(versionRepo, tutorialRepo, stepRepo, materialRepo, toolRepo)
@@ -102,7 +104,7 @@ func main() {
 		Cfg: cfg, AuthSvc: authSvc, TutorialSvc: tutorialSvc,
 		ProjectSvc: projectSvc, CategorySvc: categorySvc, TagSvc: tagSvc,
 		SearchSvc: searchSvc, RecommendSvc: recommendSvc,
-		StatsSvc: statsSvc, InteractSvc: interactSvc,
+		StatsSvc: statsSvc, InteractSvc: interactSvc, FeedSvc: feedSvc,
 		NotifSvc: notifSvc, AuditSvc: auditSvc, HistorySvc: historySvc,
 		FrontendDir: frontendDir,
 	})

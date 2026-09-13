@@ -124,3 +124,19 @@ func (r *UserRepo) Count() (int64, error) {
 	err := r.db.Model(&domain.User{}).Count(&n).Error
 	return n, err
 }
+
+// SuggestAuthors 推荐有公开内容（已发布教程或作品）的作者，排除当前用户与已关注用户
+func (r *UserRepo) SuggestAuthors(excludeIDs []uint64, limit int) ([]*domain.User, error) {
+	var list []*domain.User
+	q := r.db.Model(&domain.User{}).Where("status = 1").
+		Where("(tutorial_count > 0 OR project_count > 0)")
+	if len(excludeIDs) > 0 {
+		q = q.Where("id NOT IN ?", excludeIDs)
+	}
+	err := q.Order("(tutorial_count + project_count) DESC, score DESC, id DESC").
+		Limit(limit).Find(&list).Error
+	if err != nil {
+		return nil, apperr.Wrap(apperr.CodeDB, "查询推荐作者失败", err)
+	}
+	return list, nil
+}
