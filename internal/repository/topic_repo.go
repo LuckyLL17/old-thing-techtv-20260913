@@ -111,9 +111,12 @@ func (r *TopicRepo) AddItem(ti *domain.TopicItem) error {
 }
 
 func (r *TopicRepo) RemoveItem(topicID, itemID uint64) error {
-	err := r.db.Where("id = ? AND topic_id = ?", itemID, topicID).Delete(&domain.TopicItem{}).Error
-	if err != nil {
-		return apperr.Wrap(apperr.CodeDB, "移除专题条目失败", err)
+	res := r.db.Where("id = ? AND topic_id = ?", itemID, topicID).Delete(&domain.TopicItem{})
+	if res.Error != nil {
+		return apperr.Wrap(apperr.CodeDB, "移除专题条目失败", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return apperr.ErrNotFound
 	}
 	return nil
 }

@@ -7,11 +7,12 @@ type TopicSaveReq struct {
 	Status  *int   `json:"status"`
 }
 
+// TopicUpdateReq 部分更新：仅显式传入的字段才会被修改
 type TopicUpdateReq struct {
-	Title   string `json:"title"`
-	Summary string `json:"summary"`
-	Cover   string `json:"cover"`
-	Status  *int   `json:"status"`
+	Title   *string `json:"title"`
+	Summary *string `json:"summary"`
+	Cover   *string `json:"cover"`
+	Status  *int    `json:"status"`
 }
 
 type TopicAddItemReq struct {

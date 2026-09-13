@@ -44,16 +44,32 @@ func (s *TopicService) Create(operatorID uint64, r *TopicSaveReq) (*domain.Topic
 	return t, nil
 }
 
-func (s *TopicService) Update(id uint64, r *TopicSaveReq) (*domain.Topic, error) {
+// TopicUpdateReq 部分更新：nil 字段保持不变，避免仅切换状态时清空其他字段
+type TopicUpdateReq struct {
+	Title   *string
+	Summary *string
+	Cover   *string
+	Status  *int
+}
+
+func (s *TopicService) Update(id uint64, r *TopicUpdateReq) (*domain.Topic, error) {
 	t, err := s.topicRepo.GetByID(id)
 	if err != nil {
 		return nil, err
 	}
-	if title := strings.TrimSpace(r.Title); title != "" {
+	if r.Title != nil {
+		title := strings.TrimSpace(*r.Title)
+		if title == "" {
+			return nil, ErrValidation("专题标题不能为空")
+		}
 		t.Title = title
 	}
-	t.Summary = strings.TrimSpace(r.Summary)
-	t.Cover = strings.TrimSpace(r.Cover)
+	if r.Summary != nil {
+		t.Summary = strings.TrimSpace(*r.Summary)
+	}
+	if r.Cover != nil {
+		t.Cover = strings.TrimSpace(*r.Cover)
+	}
 	if r.Status != nil {
 		if *r.Status != domain.TopicStatusOnline && *r.Status != domain.TopicStatusOffline {
 			return nil, ErrValidation("状态值非法")

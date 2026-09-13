@@ -108,7 +108,7 @@ func (h *TopicHandler) Update(c *gin.Context) {
 		Fail(c, apperr.Wrap(apperr.CodeValidation, "参数错误", err))
 		return
 	}
-	t, err := h.topicSvc.Update(id, &service.TopicSaveReq{
+	t, err := h.topicSvc.Update(id, &service.TopicUpdateReq{
 		Title: req.Title, Summary: req.Summary, Cover: req.Cover, Status: req.Status,
 	})
 	if err != nil {
