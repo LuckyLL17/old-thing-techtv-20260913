@@ -29,6 +29,7 @@ type Deps struct {
 	NotifSvc       *service.NotificationService
 	AuditSvc       *service.AuditService
 	HistorySvc     *service.TutorialHistoryService
+	ExportSvc    *service.ExportService
 	FrontendDir    string
 }
 
@@ -48,6 +49,7 @@ func SetupRouter(d *Deps) *gin.Engine {
 	notifH := handler.NewNotificationHandler(d.NotifSvc)
 	auditH := handler.NewAuditHandler(d.AuditSvc)
 	histH := handler.NewTutorialHistoryHandler(d.HistorySvc)
+	exportH := handler.NewExportHandler(d.ExportSvc)
 	api.GET("/home", searchH.Home)
 	api.GET("/random", searchH.Random)
 	api.GET("/top", searchH.Top)
@@ -80,6 +82,8 @@ func SetupRouter(d *Deps) *gin.Engine {
 		tuts.GET("/:id/history/:version", histH.Get)
 		tuts.POST("/:id/history/snapshot", middleware.Auth(d.AuthSvc), histH.Snapshot)
 		tuts.POST("/:id/history/rollback", middleware.Auth(d.AuthSvc), histH.Rollback)
+		tuts.POST("/:id/export", middleware.OptionalAuth(d.AuthSvc), exportH.Create)
+		tuts.GET("/:id/exports", exportH.List)
 	}
 	projs := api.Group("/projects")
 	{

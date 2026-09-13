@@ -7,7 +7,7 @@
 | # | 模块 | 说明 |
 |---|---|---|
 | 1 | 用户模块 | 注册 / 登录 / 密码重置（JWT）；头像、昵称、擅长领域；新手/学徒/匠人/大师等级；作品集展示 |
-| 2 | 改造教程 | 标题、简介、材料清单、工具清单、图文步骤、对比前后首图、难度（简单/中等/困难）、耗时估算、分类、草稿/发布/归档状态、版本历史、版本快照与回滚、浏览/收藏/尝试计数、标签 |
+| 2 | 改造教程 | 标题、简介、材料清单、工具清单、图文步骤、对比前后首图、难度（简单/中等/困难）、耗时估算、分类、草稿/发布/归档状态、版本历史、版本快照与回滚、浏览/收藏/尝试计数、标签、A4 打印导出（触发即快照，后续修改不影响已生成文件） |
 | 3 | 步骤编辑器 | 顺序拖拽重排、文字+图、步骤提醒、步骤耗时 |
 | 4 | 作品展示 | 上传作品图、关联教程、个性化改动、受欢迎评分、评论交流 |
 | 5 | 互动社区 | 教程评论/回复、作品点赞收藏、用户关注与私信、通知中心（评论/回复/收藏/关注/尝试/作品/系统/审核结果） |
@@ -33,12 +33,12 @@
 
 | 指标 | 数值 |
 |---|---|
-| Go 源文件 | 59 个 |
+| Go 源文件 | 64 个 |
 | 物理总代码行 | 5,971 行 |
 | 有效 Go 代码行（去空行/纯注释） | 5,410 行 |
 | 前端（HTML/CSS/JS） | 651 行 |
-| SQLite 迁移脚本 | 6 个 SQL |
-| 数据库表 | 16 张（users / categories / tags / tutorials / tutorial_versions / tutorial_tags / steps / materials / tools / projects / comments / favorites / attempts / follows / messages / notifications / audit_logs） |
+| SQLite 迁移脚本 | 7 个 SQL |
+| 数据库表 | 17 张（users / categories / tags / tutorials / tutorial_versions / tutorial_exports / tutorial_tags / steps / materials / tools / projects / comments / favorites / attempts / follows / messages / notifications / audit_logs） |
 
 ## 目录结构
 
@@ -321,6 +321,8 @@ rate:
 | GET  | `/tutorials/:id/history/:version` | 查看某一版本快照内容（JSON） | 否 |
 | POST | `/tutorials/:id/history/snapshot` | 手动触发版本快照保存 | 是 |
 | POST | `/tutorials/:id/history/rollback` | `{ "version": N }` 回滚到指定版本 | 是 |
+| POST | `/tutorials/:id/export` | 生成 A4 打印快照（自包含 HTML，本地图片内联 base64），返回文件 URL | 否 |
+| GET  | `/tutorials/:id/exports` | 历史导出快照列表（新→旧） | 否 |
 
 ### 作品
 
@@ -438,7 +440,7 @@ POST /api/v1/upload   Content-Type: multipart/form-data   Form-Field: file
 
 ## 数据库迁移说明
 
-默认使用 `GORM AutoMigrate` 在首次启动时建表，无需手动执行 SQL。若需纯 SQL 版本，`migrations/` 下提供了 6 个顺序脚本，可按需改造 PostgreSQL / MySQL。
+默认使用 `GORM AutoMigrate` 在首次启动时建表，无需手动执行 SQL。若需纯 SQL 版本，`migrations/` 下提供了 7 个顺序脚本，可按需改造 PostgreSQL / MySQL。
 
 ```
 migrations/
@@ -448,6 +450,7 @@ migrations/
   004_steps_materials_tools.sql
   005_projects_comments_favorites_attempts.sql
   006_follows_messages_notifications_audit.sql
+  007_tutorial_exports.sql
 ```
 
 ## 启动命令（快速备忘）

@@ -197,7 +197,7 @@ async function viewTutorial(id) {
   let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/tutorials">教程</a> / <span>${t.title}</span></div>`;
   h += `<div style="display:flex;gap:10px;margin-bottom:10px;align-items:center">${difficultyBadge(t.difficulty)}<span style="color:#888">⏱ ${t.estimated_hours} 小时</span><span>${(t.tags||[]).map(x=>`<span class="tag">#${x.name}</span>`).join('')}</span></div>`;
   h += `<h1 style="font-size:30px;margin-bottom:12px">${t.title}</h1>`;
-  h += `<div class="flex-between" style="margin-bottom:18px"><div class="flex">${avatarFor(user)}<div><div style="font-weight:600">${user.nickname||user.username||'匿名'} <span style="color:#7c5cff;font-size:12px">[${levelLabel(user.level)}]</span></div><div style="font-size:12px;color:#888">${timeAgo(t.created_at)} · 👁${t.view_count} ❤️${t.favorite_count} 🛠${t.attempt_count}</div></div></div><div class="flex"><button class="btn btn-outline" onclick="toggleFav('tutorial',${t.id},this)">${fav?'❤️ 已收藏':'🤍 收藏'}</button><button class="btn btn-solid" onclick="attemptTut(${t.id})">🛠 我要尝试</button></div></div>`;
+  h += `<div class="flex-between" style="margin-bottom:18px"><div class="flex">${avatarFor(user)}<div><div style="font-weight:600">${user.nickname||user.username||'匿名'} <span style="color:#7c5cff;font-size:12px">[${levelLabel(user.level)}]</span></div><div style="font-size:12px;color:#888">${timeAgo(t.created_at)} · 👁${t.view_count} ❤️${t.favorite_count} 🛠${t.attempt_count}</div></div></div><div class="flex"><button class="btn btn-outline" onclick="exportTutorial(${t.id})">🖨️ A4 导出</button><button class="btn btn-outline" onclick="toggleFav('tutorial',${t.id},this)">${fav?'❤️ 已收藏':'🤍 收藏'}</button><button class="btn btn-solid" onclick="attemptTut(${t.id})">🛠 我要尝试</button></div></div>`;
   h += `<div class="before-after" style="margin-bottom:24px"><div><div style="padding:6px 12px;background:#ffe3e3;color:#c92a2a;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;display:inline-block">改造前</div><img src="${t.cover_before}" style="border-radius:0 14px 14px 14px;width:100%;height:300px;object-fit:cover"></div><div><div style="padding:6px 12px;background:#d3f9d8;color:#2b8a3e;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;display:inline-block">改造后</div><img src="${t.cover_after}" style="border-radius:0 14px 14px 14px;width:100%;height:300px;object-fit:cover"></div></div>`;
   h += `<div class="card" style="padding:24px;margin-bottom:24px"><h2 style="font-size:18px;margin-bottom:10px">📝 简介</h2><p style="color:#555">${t.summary||'暂无简介'}</p></div>`;
   if ((t.materials||[]).length) {
@@ -212,6 +212,14 @@ async function viewTutorial(id) {
     t.steps.forEach((s, i) => {
       h += `<div class="step"><div class="step-index">${i+1}</div><h3 style="font-size:16px;margin-bottom:10px">${s.title||'步骤 '+(i+1)}</h3>${s.image?`<img src="${s.image}" style="width:100%;border-radius:10px;margin:10px 0;max-height:400px;object-fit:cover">`:''}<p style="color:#444;white-space:pre-wrap">${s.content}</p>${s.reminder?`<div style="margin-top:10px;padding:10px 14px;background:#fff9db;border-left:4px solid #fcc419;border-radius:4px;color:#7a5f00">⚠️ ${s.reminder}</div>`:''}${s.estimated_minutes?`<div style="margin-top:8px;color:#888;font-size:12px">⏱ 预计耗时：${s.estimated_minutes} 分钟</div>`:''}</div>`;
     });
+  }
+  const er = await get('/tutorials/' + id + '/exports', false);
+  if (er.success && er.data && er.data.length) {
+    h += `<div class="card" style="padding:20px;margin-bottom:24px"><h2 style="font-size:16px;margin-bottom:12px">🖨️ 打印快照 <small style="font-weight:400;color:#999;font-size:12px">每次导出固定为当时的版本，后续修改不影响已生成文件</small></h2>`;
+    er.data.forEach(e => {
+      h += `<div class="flex-between" style="padding:8px 0;border-bottom:1px solid #f0f0f0"><span style="font-size:13px">📄 v${e.version} · ${e.title} <span style="color:#999">· ${(e.created_at||'').replace('T',' ').slice(0,16)}</span></span><a class="btn btn-ghost" href="${e.file_url}" target="_blank">打开</a></div>`;
+    });
+    h += `</div>`;
   }
   h += `<div class="section-title">🎨 大家的作品<small onclick="location.hash='#/projects?tutorial_id=${t.id}'">查看全部 →</small></div>`;
   const pr = await get('/projects?tutorial_id=' + t.id + '&size=6', false);
@@ -228,6 +236,12 @@ async function viewTutorial(id) {
     h += `<div class="empty" style="padding:30px">还没有评论，抢个沙发吧~</div>`;
   }
   $('#app').innerHTML = h;
+}
+async function exportTutorial(id) {
+  const r = await post('/tutorials/' + id + '/export', {}, false);
+  if (!r.success) return toast(r.message, 'error');
+  toast('已生成 A4 快照（v' + r.data.version + '），之后教程修改不影响此文件', 'success');
+  window.open(r.data.file_url, '_blank');
 }
 async function toggleFav(type, id, btn) {
   if (!requireLogin()) return;

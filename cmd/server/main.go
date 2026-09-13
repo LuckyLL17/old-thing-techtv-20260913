@@ -77,6 +77,7 @@ func main() {
 	messageRepo := repository.NewMessageRepo(db)
 	toolRepo := repository.NewToolRepo(db)
 	versionRepo := repository.NewTutorialVersionRepo(db)
+	exportRepo := repository.NewExportRepo(db)
 	notifRepo := repository.NewNotificationRepo(db)
 	auditRepo := repository.NewAuditLogRepo(db)
 	if err := categoryRepo.InitDefaults(); err != nil {
@@ -94,6 +95,7 @@ func main() {
 	notifSvc := service.NewNotificationService(notifRepo)
 	auditSvc := service.NewAuditService(auditRepo)
 	historySvc := service.NewTutorialHistoryService(versionRepo, tutorialRepo, stepRepo, materialRepo, toolRepo)
+	exportSvc := service.NewExportService(tutorialRepo, exportRepo, cfg.Upload.Dir)
 	updater := worker.NewStatsUpdater(userRepo, tutorialRepo, commentRepo, categoryRepo, tagRepo)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -104,6 +106,7 @@ func main() {
 		SearchSvc: searchSvc, RecommendSvc: recommendSvc,
 		StatsSvc: statsSvc, InteractSvc: interactSvc,
 		NotifSvc: notifSvc, AuditSvc: auditSvc, HistorySvc: historySvc,
+		ExportSvc:   exportSvc,
 		FrontendDir: frontendDir,
 	})
 	r.POST("/api/v1/upload", middleware.Auth(authSvc), api.UploadHandler(&cfg.Upload))
@@ -159,6 +162,7 @@ func autoMigrate(db *gorm.DB) error {
 		&domain.Tag{},
 		&domain.Tutorial{},
 		&domain.TutorialVersion{},
+		&domain.TutorialExport{},
 		&domain.TutorialTag{},
 		&domain.Step{},
 		&domain.Material{},
