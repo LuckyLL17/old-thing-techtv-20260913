@@ -75,12 +75,12 @@ func (h *TutorialHandler) Create(c *gin.Context) {
 			Name: m.Name, Quantity: m.Quantity, Unit: m.Unit, Notes: m.Notes,
 		})
 	}
-	t, err := h.tutorialSvc.Create(r)
+	t, granted, err := h.tutorialSvc.Create(r)
 	if err != nil {
 		Fail(c, err)
 		return
 	}
-	OK(c, t)
+	OK(c, gin.H{"tutorial": t, "badges": granted})
 }
 
 func (h *TutorialHandler) Get(c *gin.Context) {
@@ -146,12 +146,12 @@ func (h *TutorialHandler) Update(c *gin.Context) {
 			Name: m.Name, Quantity: m.Quantity, Unit: m.Unit, Notes: m.Notes,
 		})
 	}
-	t, err := h.tutorialSvc.Update(id, uid, r)
+	t, granted, err := h.tutorialSvc.Update(id, uid, r)
 	if err != nil {
 		Fail(c, err)
 		return
 	}
-	OK(c, t)
+	OK(c, gin.H{"tutorial": t, "badges": granted})
 }
 
 func (h *TutorialHandler) Delete(c *gin.Context) {

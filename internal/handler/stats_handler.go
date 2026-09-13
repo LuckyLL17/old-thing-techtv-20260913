@@ -56,12 +56,12 @@ func (h *StatsHandler) ToggleFavorite(c *gin.Context) {
 		Fail(c, apperr.Wrap(apperr.CodeValidation, "参数错误", err))
 		return
 	}
-	added, err := h.interactSvc.ToggleFavorite(uid, req.TargetType, req.TargetID)
+	added, granted, err := h.interactSvc.ToggleFavorite(uid, req.TargetType, req.TargetID)
 	if err != nil {
 		Fail(c, err)
 		return
 	}
-	OK(c, gin.H{"favorited": added})
+	OK(c, gin.H{"favorited": added, "badges": granted})
 }
 
 func (h *StatsHandler) Follow(c *gin.Context) {

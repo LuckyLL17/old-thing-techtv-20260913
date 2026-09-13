@@ -6,18 +6,24 @@ import (
 )
 
 type InteractionService struct {
-	commentRepo  *repository.CommentRepo
-	favoriteRepo *repository.FavoriteRepo
-	attemptRepo  *repository.AttemptRepo
-	followRepo   *repository.FollowRepo
-	messageRepo  *repository.MessageRepo
-	tutorialRepo *repository.TutorialRepo
-	projectRepo  *repository.ProjectRepo
+	commentRepo    *repository.CommentRepo
+	favoriteRepo   *repository.FavoriteRepo
+	attemptRepo    *repository.AttemptRepo
+	followRepo     *repository.FollowRepo
+	messageRepo    *repository.MessageRepo
+	tutorialRepo   *repository.TutorialRepo
+	projectRepo    *repository.ProjectRepo
+	achievementSvc *AchievementService
 }
 
 func NewInteractionService(cr *repository.CommentRepo, fr *repository.FavoriteRepo, ar *repository.AttemptRepo,
 	flr *repository.FollowRepo, mr *repository.MessageRepo, tur *repository.TutorialRepo, pr *repository.ProjectRepo) *InteractionService {
 	return &InteractionService{commentRepo: cr, favoriteRepo: fr, attemptRepo: ar, followRepo: flr, messageRepo: mr, tutorialRepo: tur, projectRepo: pr}
+}
+
+// SetAchievementService 由 main 注入
+func (s *InteractionService) SetAchievementService(a *AchievementService) {
+	s.achievementSvc = a
 }
 
 func (s *InteractionService) Comment(userID uint64, targetType string, targetID uint64, content string, parentID uint64) (*domain.Comment, error) {
@@ -69,24 +75,28 @@ func (s *InteractionService) ListComments(targetType string, targetID uint64, pa
 	return s.commentRepo.List(targetType, targetID, page, size)
 }
 
-func (s *InteractionService) ToggleFavorite(userID uint64, targetType string, targetID uint64) (bool, error) {
+func (s *InteractionService) ToggleFavorite(userID uint64, targetType string, targetID uint64) (bool, []GrantedBadge, error) {
 	ok, err := s.favoriteRepo.Exists(userID, targetType, targetID)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 	if ok {
 		err = s.favoriteRepo.Delete(userID, targetType, targetID)
 		if err == nil && targetType == domain.FavTypeTutorial {
 			s.tutorialRepo.IncCounts(targetID, -1, 0, 0, 0)
 		}
-		return false, err
+		// 取消收藏不触发徽章：已获得的徽章不随数据回落收回
+		return false, nil, err
 	}
 	f := &domain.Favorite{UserID: userID, TargetType: targetType, TargetID: targetID}
 	err = s.favoriteRepo.Create(f)
 	if err == nil && targetType == domain.FavTypeTutorial {
 		s.tutorialRepo.IncCounts(targetID, 1, 0, 0, 0)
 	}
-	return true, err
+	if err != nil || targetType != domain.FavTypeTutorial {
+		return true, nil, err
+	}
+	return true, s.achievementSvc.OnTutorialFavorited(userID), nil
 }
 
 func (s *InteractionService) IsFavorite(userID uint64, targetType string, targetID uint64) (bool, error) {

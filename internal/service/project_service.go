@@ -6,13 +6,19 @@ import (
 )
 
 type ProjectService struct {
-	projectRepo  *repository.ProjectRepo
-	tutorialRepo *repository.TutorialRepo
-	userRepo     *repository.UserRepo
+	projectRepo    *repository.ProjectRepo
+	tutorialRepo   *repository.TutorialRepo
+	userRepo       *repository.UserRepo
+	achievementSvc *AchievementService
 }
 
 func NewProjectService(pr *repository.ProjectRepo, tr *repository.TutorialRepo, ur *repository.UserRepo) *ProjectService {
 	return &ProjectService{projectRepo: pr, tutorialRepo: tr, userRepo: ur}
+}
+
+// SetAchievementService 由 main 注入
+func (s *ProjectService) SetAchievementService(a *AchievementService) {
+	s.achievementSvc = a
 }
 
 type ProjectCreateReq struct {
@@ -108,5 +114,12 @@ func (s *ProjectService) List(page, size int, tutorialID, userID uint64, sort st
 }
 
 func (s *ProjectService) Like(id uint64) error {
-	return s.projectRepo.IncLike(id, 1)
+	if err := s.projectRepo.IncLike(id, 1); err != nil {
+		return err
+	}
+	// 点赞数上涨后判定作者的点赞类徽章；查询失败不影响点赞主流程
+	if p, err := s.projectRepo.GetByID(id); err == nil {
+		s.achievementSvc.OnProjectLiked(p.UserID, id)
+	}
+	return nil
 }

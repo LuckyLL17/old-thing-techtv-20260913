@@ -79,6 +79,7 @@ func main() {
 	versionRepo := repository.NewTutorialVersionRepo(db)
 	notifRepo := repository.NewNotificationRepo(db)
 	auditRepo := repository.NewAuditLogRepo(db)
+	badgeRepo := repository.NewBadgeRepo(db)
 	if err := categoryRepo.InitDefaults(); err != nil {
 		logger.Warnf("初始化分类失败: %v", err)
 	}
@@ -94,7 +95,13 @@ func main() {
 	notifSvc := service.NewNotificationService(notifRepo)
 	auditSvc := service.NewAuditService(auditRepo)
 	historySvc := service.NewTutorialHistoryService(versionRepo, tutorialRepo, stepRepo, materialRepo, toolRepo)
+	achievementSvc := service.NewAchievementService(badgeRepo, notifSvc)
+	// 注入成就服务到业务服务，发布/点赞/收藏后实时判定徽章
+	tutorialSvc.SetAchievementService(achievementSvc)
+	projectSvc.SetAchievementService(achievementSvc)
+	interactSvc.SetAchievementService(achievementSvc)
 	updater := worker.NewStatsUpdater(userRepo, tutorialRepo, commentRepo, categoryRepo, tagRepo)
+	updater.SetAchievementService(achievementSvc)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	updater.Start(ctx)
@@ -104,7 +111,8 @@ func main() {
 		SearchSvc: searchSvc, RecommendSvc: recommendSvc,
 		StatsSvc: statsSvc, InteractSvc: interactSvc,
 		NotifSvc: notifSvc, AuditSvc: auditSvc, HistorySvc: historySvc,
-		FrontendDir: frontendDir,
+		AchievementSvc: achievementSvc,
+		FrontendDir:    frontendDir,
 	})
 	r.POST("/api/v1/upload", middleware.Auth(authSvc), api.UploadHandler(&cfg.Upload))
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -171,5 +179,7 @@ func autoMigrate(db *gorm.DB) error {
 		&domain.Message{},
 		&domain.Notification{},
 		&domain.AuditLog{},
+		&domain.UserBadge{},
+		&domain.BadgeAwardLog{},
 	)
 }

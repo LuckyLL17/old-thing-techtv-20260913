@@ -51,6 +51,39 @@ function difficultyBadge(d) {
 function levelLabel(l) {
   return { novice: '新手', apprentice: '学徒', craftsman: '匠人', master: '大师' }[l] || '新手';
 }
+const badgeCategoryLabel = c => ({ '发布': '发布成就', '点赞': '点赞成就', '坚持': '坚持成就', '收藏': '收藏成就' }[c] || c);
+function badgeProgressText(b) {
+  if (b.earned) return b.awarded_at ? '获得于 ' + (b.awarded_at || '').slice(0, 10) : '已获得';
+  return `进度 ${Math.min(b.progress, b.threshold)}/${b.threshold}`;
+}
+function renderBadgeWall(data) {
+  const badges = data.badges || [];
+  if (!badges.length) return '';
+  const groups = {};
+  badges.forEach(b => { (groups[b.category] = groups[b.category] || []).push(b); });
+  let h = `<div class="section-title">🏅 我的徽章 <small>已获得 ${data.earned_count||0} / ${data.total_count||badges.length} 枚</small></div>`;
+  h += `<div class="badge-wall">`;
+  Object.keys(groups).forEach(cat => {
+    h += groups[cat].map(b => `
+      <div class="badge-item ${b.earned ? 'badge-earned' : 'badge-locked'}" title="${b.description}">
+        <div class="badge-icon">${b.earned ? b.icon : '🔒'}</div>
+        <div class="badge-info">
+          <div class="badge-name">${b.name}</div>
+          <div class="badge-desc">${b.description}</div>
+          <div class="badge-progress">${badgeProgressText(b)}</div>
+          ${!b.earned ? `<div class="prog badge-prog"><span style="width:${Math.min(100, Math.max(3, b.progress*100/b.threshold))}%"></span></div>` : ''}
+        </div>
+      </div>`).join('');
+  });
+  h += `</div>`;
+  return h;
+}
+function showBadgeToast(badges) {
+  if (!badges || !badges.length) return;
+  badges.forEach((b, i) => {
+    setTimeout(() => toast(`${b.icon} 恭喜获得徽章「${b.name}」`, 'success'), i * 600);
+  });
+}
 function stars(n) {
   let s = '';
   for (let i = 0; i < 5; i++) s += i < (n|0) ? '★' : '☆';
@@ -197,7 +230,7 @@ async function viewTutorial(id) {
   let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/tutorials">教程</a> / <span>${t.title}</span></div>`;
   h += `<div style="display:flex;gap:10px;margin-bottom:10px;align-items:center">${difficultyBadge(t.difficulty)}<span style="color:#888">⏱ ${t.estimated_hours} 小时</span><span>${(t.tags||[]).map(x=>`<span class="tag">#${x.name}</span>`).join('')}</span></div>`;
   h += `<h1 style="font-size:30px;margin-bottom:12px">${t.title}</h1>`;
-  h += `<div class="flex-between" style="margin-bottom:18px"><div class="flex">${avatarFor(user)}<div><div style="font-weight:600">${user.nickname||user.username||'匿名'} <span style="color:#7c5cff;font-size:12px">[${levelLabel(user.level)}]</span></div><div style="font-size:12px;color:#888">${timeAgo(t.created_at)} · 👁${t.view_count} ❤️${t.favorite_count} 🛠${t.attempt_count}</div></div></div><div class="flex"><button class="btn btn-outline" onclick="toggleFav('tutorial',${t.id},this)">${fav?'❤️ 已收藏':'🤍 收藏'}</button><button class="btn btn-solid" onclick="attemptTut(${t.id})">🛠 我要尝试</button></div></div>`;
+  h += `<div class="flex-between" style="margin-bottom:18px"><div class="flex">${avatarFor(user)}<div><div style="font-weight:600">${user.nickname||user.username||'匿名'} <span style="color:#7c5cff;font-size:12px">[${levelLabel(user.level)}]</span> <span id="author-badges"></span></div><div style="font-size:12px;color:#888">${timeAgo(t.created_at)} · 👁${t.view_count} ❤️${t.favorite_count} 🛠${t.attempt_count}</div></div></div><div class="flex"><button class="btn btn-outline" onclick="toggleFav('tutorial',${t.id},this)">${fav?'❤️ 已收藏':'🤍 收藏'}</button><button class="btn btn-solid" onclick="attemptTut(${t.id})">🛠 我要尝试</button></div></div>`;
   h += `<div class="before-after" style="margin-bottom:24px"><div><div style="padding:6px 12px;background:#ffe3e3;color:#c92a2a;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;display:inline-block">改造前</div><img src="${t.cover_before}" style="border-radius:0 14px 14px 14px;width:100%;height:300px;object-fit:cover"></div><div><div style="padding:6px 12px;background:#d3f9d8;color:#2b8a3e;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;display:inline-block">改造后</div><img src="${t.cover_after}" style="border-radius:0 14px 14px 14px;width:100%;height:300px;object-fit:cover"></div></div>`;
   h += `<div class="card" style="padding:24px;margin-bottom:24px"><h2 style="font-size:18px;margin-bottom:10px">📝 简介</h2><p style="color:#555">${t.summary||'暂无简介'}</p></div>`;
   if ((t.materials||[]).length) {
@@ -228,6 +261,13 @@ async function viewTutorial(id) {
     h += `<div class="empty" style="padding:30px">还没有评论，抢个沙发吧~</div>`;
   }
   $('#app').innerHTML = h;
+  if (user.id) {
+    const br = await get('/users/' + user.id + '/badges', false);
+    const slot = $('#author-badges');
+    if (slot && br.success && br.data.badges && br.data.badges.length) {
+      slot.innerHTML = br.data.badges.map(b => `<span class="author-badge" title="${b.name}：${b.description}">${b.icon}</span>`).join('');
+    }
+  }
 }
 async function toggleFav(type, id, btn) {
   if (!requireLogin()) return;
@@ -235,6 +275,7 @@ async function toggleFav(type, id, btn) {
   if (!r.success) return toast(r.message, 'error');
   toast(r.data.favorited ? '已收藏' : '已取消', 'success');
   if (btn) btn.innerHTML = r.data.favorited ? '❤️ 已收藏' : '🤍 收藏';
+  if (r.data.favorited) showBadgeToast(r.data.badges);
 }
 async function attemptTut(id) {
   if (!requireLogin()) return;
@@ -325,7 +366,9 @@ async function viewMe() {
   let h = `<div class="bread"><a href="#/">首页</a> / 个人中心</div>`;
   h += `<div class="card" style="padding:28px;margin-bottom:24px;display:flex;gap:24px;align-items:center"><div style="width:88px;height:88px;border-radius:50%;background:linear-gradient(135deg,#7c5cff,#3bc9db);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:32px">${(u.nickname||u.username).charAt(0).toUpperCase()}</div><div style="flex:1"><h1 style="font-size:24px;margin-bottom:6px">${u.nickname||u.username} <span style="font-size:13px;color:#7c5cff;background:#f8f5ff;padding:3px 10px;border-radius:999px;">[${levelLabel(s.level)}]</span></h1><div style="color:#888">@${u.username} · ${u.email}</div>${u.specialty?`<div style="margin-top:8px;color:#555">🔧 ${u.specialty}</div>`:''}${u.bio?`<div style="margin-top:6px;color:#555">${u.bio}</div>`:''}</div><div style="text-align:right"><button class="btn btn-outline" onclick="editProfile()">编辑资料</button></div></div>`;
   h += `<div class="grid grid-4" style="margin-bottom:24px"><div class="stat-card"><div class="stat-num">${s.tutorial_count||0}</div><div class="stat-label">发布教程</div></div><div class="stat-card"><div class="stat-num">${s.project_count||0}</div><div class="stat-label">改造作品</div></div><div class="stat-card"><div class="stat-num">${s.favorite_count||0}</div><div class="stat-label">我的收藏</div></div><div class="stat-card"><div class="stat-num">${s.total_items||0}</div><div class="stat-label">累计改造 (件)</div></div><div class="stat-card"><div class="stat-num">${s.attempt_count||0}</div><div class="stat-label">尝试中 (${s.completed_count||0}完成)</div></div><div class="stat-card"><div class="stat-num">${s.score||0}</div><div class="stat-label">总积分</div></div></div>`;
-  h += `<div class="tabs"><div class="tab tab-active">📚 我的教程</div><div class="tab" onclick="location.hash='#/me/projects'">🎨 我的作品</div><div class="tab" onclick="location.hash='#/me/favorites'">⭐ 我的收藏</div><div class="tab" onclick="location.hash='#/me/attempts'">🛠 我的尝试</div><div class="tab" onclick="location.hash='#/me/messages'">✉️ 消息</div></div>`;
+  const br = await get('/me/badges');
+  if (br.success) h += renderBadgeWall(br.data);
+  h += `<div class="tabs" style="margin-top:24px"><div class="tab tab-active">📚 我的教程</div><div class="tab" onclick="location.hash='#/me/projects'">🎨 我的作品</div><div class="tab" onclick="location.hash='#/me/favorites'">⭐ 我的收藏</div><div class="tab" onclick="location.hash='#/me/attempts'">🛠 我的尝试</div><div class="tab" onclick="location.hash='#/me/messages'">✉️ 消息</div></div>`;
   const tuts = await get('/tutorials?user_id=' + u.id + '&size=20');
   if (tuts.data && tuts.data.list && tuts.data.list.length) {
     h += `<div class="grid grid-4">${renderTutorialCards(tuts.data.list)}</div>`;
@@ -399,7 +442,8 @@ async function saveTutorial(publish) {
   const r = await post('/tutorials', body);
   if (!r.success) return toast(r.message, 'error');
   toast(publish ? '发布成功！🎉' : '草稿已保存', 'success');
-  location.hash = '#/tutorials/' + r.data.id;
+  if (publish) showBadgeToast(r.data && r.data.badges);
+  location.hash = '#/tutorials/' + r.data.tutorial.id;
 }
 async function viewMessages() {
   if (!requireLogin()) return;

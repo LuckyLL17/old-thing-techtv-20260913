@@ -5,21 +5,28 @@ import (
 	"time"
 	"upcycle-hub/internal/domain"
 	"upcycle-hub/internal/repository"
+	"upcycle-hub/internal/service"
 	"upcycle-hub/pkg/logger"
 )
 
 type StatsUpdater struct {
-	userRepo     *repository.UserRepo
-	tutorialRepo *repository.TutorialRepo
-	commentRepo  *repository.CommentRepo
-	catRepo      *repository.CategoryRepo
-	tagRepo      *repository.TagRepo
-	stop         chan struct{}
+	userRepo       *repository.UserRepo
+	tutorialRepo   *repository.TutorialRepo
+	commentRepo    *repository.CommentRepo
+	catRepo        *repository.CategoryRepo
+	tagRepo        *repository.TagRepo
+	achievementSvc *service.AchievementService
+	stop           chan struct{}
 }
 
 func NewStatsUpdater(ur *repository.UserRepo, tr *repository.TutorialRepo,
 	cr *repository.CommentRepo, car *repository.CategoryRepo, tgr *repository.TagRepo) *StatsUpdater {
 	return &StatsUpdater{userRepo: ur, tutorialRepo: tr, commentRepo: cr, catRepo: car, tagRepo: tgr, stop: make(chan struct{})}
+}
+
+// SetAchievementService 由 main 注入，用于周期性对账补发徽章
+func (w *StatsUpdater) SetAchievementService(a *service.AchievementService) {
+	w.achievementSvc = a
 }
 
 func (w *StatsUpdater) Start(ctx context.Context) {
@@ -51,7 +58,24 @@ func (w *StatsUpdater) RunOnce() {
 	w.refreshUserLevels()
 	w.syncCategoryCounts()
 	w.syncTagCounts()
+	w.sweepBadges()
 	logger.Infof("stats update run complete")
+}
+
+// sweepBadges 全量对账：补发漏掉的徽章（不收回、不重复发）。
+// 新功能上线后历史用户也能在首次定时任务时获得应得徽章。
+func (w *StatsUpdater) sweepBadges() {
+	if w.achievementSvc == nil {
+		return
+	}
+	n, err := w.achievementSvc.Sweep()
+	if err != nil {
+		logger.Errorf("badge sweep: %v", err)
+		return
+	}
+	if n > 0 {
+		logger.Infof("badge sweep granted %d badge(s)", n)
+	}
 }
 
 func (w *StatsUpdater) refreshUserLevels() {

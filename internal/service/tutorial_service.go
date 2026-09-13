@@ -8,12 +8,18 @@ import (
 )
 
 type TutorialService struct {
-	tutorialRepo *repository.TutorialRepo
-	stepRepo     *repository.StepRepo
-	materialRepo *repository.MaterialRepo
-	tagRepo      *repository.TagRepo
-	categoryRepo *repository.CategoryRepo
-	userRepo     *repository.UserRepo
+	tutorialRepo   *repository.TutorialRepo
+	stepRepo       *repository.StepRepo
+	materialRepo   *repository.MaterialRepo
+	tagRepo        *repository.TagRepo
+	categoryRepo   *repository.CategoryRepo
+	userRepo       *repository.UserRepo
+	achievementSvc *AchievementService
+}
+
+// SetAchievementService 由 main 在依赖装配完成后注入，避免构造函数循环依赖
+func (s *TutorialService) SetAchievementService(a *AchievementService) {
+	s.achievementSvc = a
 }
 
 func NewTutorialService(tur *repository.TutorialRepo, sr *repository.StepRepo, mr *repository.MaterialRepo,
@@ -37,12 +43,12 @@ type TutorialCreateReq struct {
 	Tools          []*domain.Material
 }
 
-func (s *TutorialService) Create(r *TutorialCreateReq) (*domain.Tutorial, error) {
+func (s *TutorialService) Create(r *TutorialCreateReq) (*domain.Tutorial, []GrantedBadge, error) {
 	if r.Title == "" || r.CoverBefore == "" || r.CoverAfter == "" {
-		return nil, ErrValidation("标题和改造前后图为必填项")
+		return nil, nil, ErrValidation("标题和改造前后图为必填项")
 	}
 	if _, err := s.categoryRepo.GetByID(r.CategoryID); err != nil {
-		return nil, ErrValidation("分类不存在")
+		return nil, nil, ErrValidation("分类不存在")
 	}
 	t := &domain.Tutorial{
 		UserID:         r.UserID,
@@ -58,14 +64,14 @@ func (s *TutorialService) Create(r *TutorialCreateReq) (*domain.Tutorial, error)
 		Version:        1,
 	}
 	if err := s.tutorialRepo.Create(t); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for i, st := range r.Steps {
 		st.TutorialID = t.ID
 		st.StepOrder = i + 1
 	}
 	if err := s.stepRepo.BatchCreate(r.Steps); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for i, m := range r.Materials {
 		m.TutorialID = t.ID
@@ -79,29 +85,35 @@ func (s *TutorialService) Create(r *TutorialCreateReq) (*domain.Tutorial, error)
 		r.Materials = append(r.Materials, m)
 	}
 	if err := s.materialRepo.BatchCreate(r.Materials); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	tags, err := s.tagRepo.UpsertByName(r.TagNames)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := s.tagRepo.LinkTutorial(t.ID, tags); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	var granted []GrantedBadge
 	if t.Status == domain.TutorialStatusPublished {
 		s.categoryRepo.IncCount(t.CategoryID, 1)
 		s.userRepo.IncStats(t.UserID, 1, 0, 50)
+		granted = s.achievementSvc.OnTutorialPublished(t.UserID)
 	}
-	return s.tutorialRepo.GetByID(t.ID, true)
+	created, err := s.tutorialRepo.GetByID(t.ID, true)
+	if err != nil {
+		return nil, nil, err
+	}
+	return created, granted, nil
 }
 
-func (s *TutorialService) Update(id, userID uint64, r *TutorialCreateReq) (*domain.Tutorial, error) {
+func (s *TutorialService) Update(id, userID uint64, r *TutorialCreateReq) (*domain.Tutorial, []GrantedBadge, error) {
 	t, err := s.tutorialRepo.GetByID(id, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if t.UserID != userID {
-		return nil, ErrForbidden("无权修改此教程")
+		return nil, nil, ErrForbidden("无权修改此教程")
 	}
 	prev := &domain.TutorialVersion{
 		TutorialID: t.ID,
@@ -141,7 +153,7 @@ func (s *TutorialService) Update(id, userID uint64, r *TutorialCreateReq) (*doma
 	}
 	t.Version++
 	if err := s.tutorialRepo.Update(t); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(r.Steps) > 0 {
 		s.stepRepo.DeleteByTutorial(id)
@@ -175,14 +187,21 @@ func (s *TutorialService) Update(id, userID uint64, r *TutorialCreateReq) (*doma
 		tags, _ := s.tagRepo.UpsertByName(r.TagNames)
 		s.tagRepo.LinkTutorial(id, tags)
 	}
+	var granted []GrantedBadge
 	if oldStatus != domain.TutorialStatusPublished && t.Status == domain.TutorialStatusPublished {
 		s.categoryRepo.IncCount(t.CategoryID, 1)
 		s.userRepo.IncStats(t.UserID, 1, 0, 50)
+		// 草稿/归档转为发布：视为首次发布时刻，触发首发与连续月徽章
+		granted = s.achievementSvc.OnTutorialPublished(t.UserID)
 	} else if oldStatus == domain.TutorialStatusPublished && t.Status != domain.TutorialStatusPublished {
 		s.categoryRepo.IncCount(oldCat, -1)
 		s.userRepo.IncStats(t.UserID, -1, 0, -50)
 	}
-	return s.tutorialRepo.GetByID(id, true)
+	updated, err := s.tutorialRepo.GetByID(id, true)
+	if err != nil {
+		return nil, nil, err
+	}
+	return updated, granted, nil
 }
 
 func (s *TutorialService) Delete(id, userID uint64) error {

@@ -29,6 +29,7 @@ type Deps struct {
 	NotifSvc       *service.NotificationService
 	AuditSvc       *service.AuditService
 	HistorySvc     *service.TutorialHistoryService
+	AchievementSvc *service.AchievementService
 	FrontendDir    string
 }
 
@@ -48,6 +49,7 @@ func SetupRouter(d *Deps) *gin.Engine {
 	notifH := handler.NewNotificationHandler(d.NotifSvc)
 	auditH := handler.NewAuditHandler(d.AuditSvc)
 	histH := handler.NewTutorialHistoryHandler(d.HistorySvc)
+	badgeH := handler.NewBadgeHandler(d.AchievementSvc)
 	api.GET("/home", searchH.Home)
 	api.GET("/random", searchH.Random)
 	api.GET("/top", searchH.Top)
@@ -107,13 +109,16 @@ func SetupRouter(d *Deps) *gin.Engine {
 		me.POST("/notifications/:id/read", notifH.MarkRead)
 		me.POST("/notifications/read-all", notifH.MarkAllRead)
 		me.DELETE("/notifications", notifH.Clear)
+		me.GET("/badges", badgeH.Mine)
 	}
 	admin := api.Group("/admin", middleware.Auth(d.AuthSvc))
 	{
 		admin.GET("/audit", auditH.List)
 		admin.GET("/audit/stats", auditH.Stats)
+		admin.GET("/badge-logs", badgeH.Logs)
 	}
 	api.GET("/users/:id/follow", middleware.OptionalAuth(d.AuthSvc), statsH.FollowInfo)
+	api.GET("/users/:id/badges", middleware.OptionalAuth(d.AuthSvc), badgeH.Public)
 	api.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "version": "1.0"})
 	})
