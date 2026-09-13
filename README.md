@@ -7,13 +7,14 @@
 | # | 模块 | 说明 |
 |---|---|---|
 | 1 | 用户模块 | 注册 / 登录 / 密码重置（JWT）；头像、昵称、擅长领域；新手/学徒/匠人/大师等级；作品集展示 |
-| 2 | 改造教程 | 标题、简介、材料清单、工具清单、图文步骤、对比前后首图、难度（简单/中等/困难）、耗时估算、分类、草稿/发布/归档状态、版本历史、版本快照与回滚、浏览/收藏/尝试计数、标签 |
+| 2 | 改造教程 | 标题、简介、材料清单、工具清单、图文步骤、对比前后首图、难度（简单/中等/困难）、耗时估算、分类、草稿/待审/发布/驳回/归档状态、版本历史、版本快照与回滚、浏览/收藏/尝试计数、标签 |
 | 3 | 步骤编辑器 | 顺序拖拽重排、文字+图、步骤提醒、步骤耗时 |
 | 4 | 作品展示 | 上传作品图、关联教程、个性化改动、受欢迎评分、评论交流 |
 | 5 | 互动社区 | 教程评论/回复、作品点赞收藏、用户关注与私信、通知中心（评论/回复/收藏/关注/尝试/作品/系统/审核结果） |
 | 6 | 发现推荐 | 分类浏览、难度筛选、最新/热门/最多尝试、热门标签云、随机灵感、关键词搜索 |
-| 7 | 个人中心 | 我发布的 / 收藏 / 尝试记录 / 作品 / 改造总计 / 站内通知 |
-| 8 | 统计看板 + 管理 | 平台总数、TOP10 热门教程、最活跃用户、分类占比、月度趋势、审计日志、管理员操作审计统计 |
+| 7 | 个人中心 | 我发布的（含审核状态与驳回原因）/ 收藏 / 尝试记录 / 作品 / 改造总计 / 站内通知 |
+| 8 | 审核流程 | 教程提交后进入待审队列，不公开展示；管理员按状态查看待审内容、通过或填写原因驳回；结果实时通知作者；被驳回可修改后重新提交；管理接口仅管理员角色可访问 |
+| 9 | 统计看板 + 管理 | 平台总数、TOP10 热门教程、最活跃用户、分类占比、月度趋势、审计日志、管理员操作审计统计 |
 
 ## 技术栈
 
@@ -286,6 +287,10 @@ rate:
   enable: true               # 开启限流
   limit: 300                 # 每窗口最大请求数
   window: 60                 # 窗口（秒）
+admin:
+  username: admin            # 首次启动播种的管理员账号
+  email: admin@upcycle.local
+  password: admin123456      # 生产环境务必用 UPCYCLE_ADMIN_PASSWORD 覆盖
 ```
 
 ## 核心 API
@@ -307,11 +312,12 @@ rate:
 
 | 方法 | 路径 | 说明 | 鉴权 |
 |---|---|---|---|
-| GET  | `/tutorials` | 列表：支持分类/难度/排序/标签筛选、分页 | 否 |
-| GET  | `/tutorials/:id` | 详情：步骤+材料+工具+评论计数（可选登录以标记收藏/尝试） | 可选 |
-| POST | `/tutorials` | 发布教程，含 `steps/materials/tools/tags` | 是 |
+| GET  | `/tutorials` | 列表：支持分类/难度/排序/标签筛选、分页（公开仅已发布；作者带 token 查 `user_id=自己` 可见全部状态） | 可选 |
+| GET  | `/tutorials/:id` | 详情：步骤+材料+工具+评论计数（非公开教程仅作者/管理员可见） | 可选 |
+| POST | `/tutorials` | 发布教程，含 `steps/materials/tools/tags`；`status=published` 会进入待审队列而非直接公开 | 是 |
 | PUT  | `/tutorials/:id` | 更新（仅作者可改） | 是 |
 | DELETE | `/tutorials/:id` | 删除（软删，仅作者/管理员） | 是 |
+| POST | `/tutorials/:id/submit` | 将草稿/被驳回的教程提交审核（状态 → `pending`） | 是（作者） |
 | POST | `/tutorials/:id/reorder` | 拖拽重排步骤顺序 | 是 |
 | POST | `/tutorials/:id/comments` | 评论教程，支持 `parent_id` 回复 | 是 |
 | GET  | `/tutorials/:id/comments` | 评论列表分页 | 否 |
@@ -363,12 +369,19 @@ rate:
 | POST | `/notifications/read-all` | 全部标已读，返回更新条数 |
 | DELETE | `/notifications` | 清理，`older_than_days=30` 清 30 天前，留空清全部 |
 
-### 管理端 `/admin`（鉴权 + 权限）
+### 管理端 `/admin`（鉴权 + 管理员角色）
+
+普通账号调用以下接口一律返回 `403 需要管理员权限`，未登录返回 `401`。管理员账号由 `config.yaml` 的 `admin` 段在首次启动时播种（默认 `admin@upcycle.local / admin123456`，可用 `UPCYCLE_ADMIN_PASSWORD` 等环境变量覆盖，生产环境务必修改）。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
+| GET | `/tutorials?status=pending` | 审核队列：按状态（pending/rejected/published/draft/archived）分页查看教程 |
+| POST | `/tutorials/:id/approve` | 审核通过：状态 → `published`，教程公开，计数入账，通知作者 |
+| POST | `/tutorials/:id/reject` | 审核驳回：`{ "reason": "..." }` 必填，状态 → `rejected`，原因通知作者 |
 | GET | `/audit` | 审计日志：支持 `user_id/action/target_type/from/to` 过滤分页 |
 | GET | `/audit/stats` | 按动作聚合计数，`days=30` 指定统计窗口 |
+
+审核状态机：`draft ──提交──> pending ──通过──> published`；`pending ──驳回──> rejected ──修改后重新提交──> pending`。审核结果通过站内通知（`audit_pass` / `audit_reject`）送达作者，驳回原因同时记录在教程的 `review_note` 字段上。
 
 ### 上传
 
@@ -448,6 +461,7 @@ migrations/
   004_steps_materials_tools.sql
   005_projects_comments_favorites_attempts.sql
   006_follows_messages_notifications_audit.sql
+  007_review_flow.sql
 ```
 
 ## 启动命令（快速备忘）

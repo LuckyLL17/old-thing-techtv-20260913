@@ -54,6 +54,7 @@ func (s *AuthService) Register(username, email, password string) (*domain.User, 
 		PasswordHash: string(hash),
 		Nickname:     username,
 		Level:        domain.UserLevelNovice,
+		Role:         domain.RoleUser,
 		Status:       1,
 	}
 	u.ComputeLevel()
@@ -141,6 +142,36 @@ func (s *AuthService) ResetPassword(id uint64, oldPwd, newPwd string) error {
 
 func (s *AuthService) GetUserByID(id uint64) (*domain.User, error) {
 	return s.userRepo.GetByID(id)
+}
+
+// EnsureAdmin 保证配置中的管理员账号存在且具备管理员角色，用于启动时播种。
+func (s *AuthService) EnsureAdmin(username, email, password string) (*domain.User, error) {
+	if u, err := s.userRepo.GetByEmail(email); err == nil {
+		if !u.IsAdmin() {
+			u.Role = domain.RoleAdmin
+			if err := s.userRepo.Update(u); err != nil {
+				return nil, err
+			}
+		}
+		return u, nil
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, apperr.Wrap(apperr.CodeInternal, "密码加密失败", err)
+	}
+	u := &domain.User{
+		Username:     username,
+		Email:        email,
+		PasswordHash: string(hash),
+		Nickname:     username,
+		Level:        domain.UserLevelMaster,
+		Role:         domain.RoleAdmin,
+		Status:       1,
+	}
+	if err := s.userRepo.Create(u); err != nil {
+		return nil, err
+	}
+	return u, nil
 }
 
 func (s *AuthService) UpdateProfile(u *domain.User) error {

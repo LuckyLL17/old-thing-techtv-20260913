@@ -29,6 +29,7 @@ type Deps struct {
 	NotifSvc       *service.NotificationService
 	AuditSvc       *service.AuditService
 	HistorySvc     *service.TutorialHistoryService
+	ReviewSvc      *service.ReviewService
 	FrontendDir    string
 }
 
@@ -41,13 +42,14 @@ func SetupRouter(d *Deps) *gin.Engine {
 	r.Use(middleware.RateLimit(&d.Cfg.Rate))
 	api := r.Group("/api/v1")
 	authH := handler.NewAuthHandler(d.AuthSvc, d.StatsSvc)
-	tutH := handler.NewTutorialHandler(d.TutorialSvc, d.InteractSvc, d.CategorySvc, d.TagSvc)
+	tutH := handler.NewTutorialHandler(d.TutorialSvc, d.InteractSvc, d.CategorySvc, d.TagSvc, d.AuthSvc)
 	projH := handler.NewProjectHandler(d.ProjectSvc, d.InteractSvc)
 	searchH := handler.NewSearchHandler(d.SearchSvc, d.RecommendSvc)
 	statsH := handler.NewStatsHandler(d.StatsSvc, d.InteractSvc)
 	notifH := handler.NewNotificationHandler(d.NotifSvc)
 	auditH := handler.NewAuditHandler(d.AuditSvc)
 	histH := handler.NewTutorialHistoryHandler(d.HistorySvc)
+	reviewH := handler.NewReviewHandler(d.ReviewSvc)
 	api.GET("/home", searchH.Home)
 	api.GET("/random", searchH.Random)
 	api.GET("/top", searchH.Top)
@@ -66,12 +68,13 @@ func SetupRouter(d *Deps) *gin.Engine {
 	}
 	tuts := api.Group("/tutorials")
 	{
-		tuts.GET("", tutH.List)
+		tuts.GET("", middleware.OptionalAuth(d.AuthSvc), tutH.List)
 		tuts.GET("/:id", middleware.OptionalAuth(d.AuthSvc), tutH.Get)
 		tuts.POST("", middleware.Auth(d.AuthSvc), tutH.Create)
 		tuts.PUT("/:id", middleware.Auth(d.AuthSvc), tutH.Update)
 		tuts.DELETE("/:id", middleware.Auth(d.AuthSvc), tutH.Delete)
 		tuts.POST("/:id/reorder", middleware.Auth(d.AuthSvc), tutH.ReorderSteps)
+		tuts.POST("/:id/submit", middleware.Auth(d.AuthSvc), reviewH.Submit)
 		tuts.GET("/:id/comments", tutH.Comments)
 		tuts.POST("/:id/comments", middleware.Auth(d.AuthSvc), tutH.AddComment)
 		tuts.POST("/:id/attempt", middleware.Auth(d.AuthSvc), tutH.Attempt)
@@ -108,10 +111,13 @@ func SetupRouter(d *Deps) *gin.Engine {
 		me.POST("/notifications/read-all", notifH.MarkAllRead)
 		me.DELETE("/notifications", notifH.Clear)
 	}
-	admin := api.Group("/admin", middleware.Auth(d.AuthSvc))
+	admin := api.Group("/admin", middleware.Auth(d.AuthSvc), middleware.RequireAdmin(d.AuthSvc))
 	{
 		admin.GET("/audit", auditH.List)
 		admin.GET("/audit/stats", auditH.Stats)
+		admin.GET("/tutorials", reviewH.List)
+		admin.POST("/tutorials/:id/approve", reviewH.Approve)
+		admin.POST("/tutorials/:id/reject", reviewH.Reject)
 	}
 	api.GET("/users/:id/follow", middleware.OptionalAuth(d.AuthSvc), statsH.FollowInfo)
 	api.GET("/health", func(c *gin.Context) {

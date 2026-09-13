@@ -15,6 +15,7 @@ type Config struct {
 	Log      LogConfig
 	Upload   UploadConfig
 	Rate     RateConfig
+	Admin    AdminConfig
 }
 
 type ServerConfig struct {
@@ -56,6 +57,13 @@ type RateConfig struct {
 	Window int
 }
 
+// AdminConfig 首次启动时播种的管理员账号。
+type AdminConfig struct {
+	Username string
+	Email    string
+	Password string
+}
+
 func Load(path string) (*Config, error) {
 	v := viper.New()
 	v.SetConfigFile(path)
@@ -93,4 +101,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("rate.enable", true)
 	v.SetDefault("rate.limit", 100)
 	v.SetDefault("rate.window", 60)
+	v.SetDefault("admin.username", "admin")
+	v.SetDefault("admin.email", "admin@upcycle.local")
+	v.SetDefault("admin.password", "admin123456")
 }

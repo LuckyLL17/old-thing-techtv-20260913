@@ -94,6 +94,12 @@ func main() {
 	notifSvc := service.NewNotificationService(notifRepo)
 	auditSvc := service.NewAuditService(auditRepo)
 	historySvc := service.NewTutorialHistoryService(versionRepo, tutorialRepo, stepRepo, materialRepo, toolRepo)
+	reviewSvc := service.NewReviewService(tutorialRepo, categoryRepo, userRepo, notifSvc, auditSvc)
+	if cfg.Admin.Username != "" && cfg.Admin.Email != "" && cfg.Admin.Password != "" {
+		if _, err := authSvc.EnsureAdmin(cfg.Admin.Username, cfg.Admin.Email, cfg.Admin.Password); err != nil {
+			logger.Warnf("初始化管理员账号失败: %v", err)
+		}
+	}
 	updater := worker.NewStatsUpdater(userRepo, tutorialRepo, commentRepo, categoryRepo, tagRepo)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -104,6 +110,7 @@ func main() {
 		SearchSvc: searchSvc, RecommendSvc: recommendSvc,
 		StatsSvc: statsSvc, InteractSvc: interactSvc,
 		NotifSvc: notifSvc, AuditSvc: auditSvc, HistorySvc: historySvc,
+		ReviewSvc: reviewSvc,
 		FrontendDir: frontendDir,
 	})
 	r.POST("/api/v1/upload", middleware.Auth(authSvc), api.UploadHandler(&cfg.Upload))

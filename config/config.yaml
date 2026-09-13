@@ -23,3 +23,7 @@ rate:
   enable: true
   limit: 300
   window: 60
+admin:
+  username: admin
+  email: admin@upcycle.local
+  password: admin123456

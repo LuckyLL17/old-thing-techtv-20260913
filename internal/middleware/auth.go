@@ -81,6 +81,25 @@ func MustLogin(c *gin.Context) uint64 {
 	return id
 }
 
+// RequireAdmin 必须在 Auth 之后使用，校验当前用户是否为管理员。
+func RequireAdmin(authSvc *service.AuthService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		uid := MustLogin(c)
+		if uid == 0 {
+			c.JSON(401, respErr(apperr.ErrUnauthorized))
+			c.Abort()
+			return
+		}
+		u, err := authSvc.GetUserByID(uid)
+		if err != nil || !u.IsAdmin() {
+			c.JSON(403, respErr(apperr.New(apperr.CodeForbidden, "需要管理员权限")))
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 func respErr(err error) gin.H {
 	if ae, ok := err.(*apperr.AppError); ok {
 		return gin.H{"code": ae.Code, "message": ae.Message, "success": false}

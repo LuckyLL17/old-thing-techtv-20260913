@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"upcycle-hub/internal/domain"
 	"upcycle-hub/internal/repository"
+	apperr "upcycle-hub/pkg/errors"
 	"upcycle-hub/pkg/utils"
 )
 
@@ -200,14 +201,28 @@ func (s *TutorialService) Delete(id, userID uint64) error {
 	return s.tutorialRepo.Delete(id)
 }
 
-func (s *TutorialService) Get(id uint64, incView bool) (*domain.Tutorial, error) {
-	if incView {
+func (s *TutorialService) Get(id uint64, incView bool, viewerID uint64, isAdmin bool) (*domain.Tutorial, error) {
+	t, err := s.tutorialRepo.GetByID(id, true)
+	if err != nil {
+		return nil, err
+	}
+	// 非公开教程仅作者本人与管理员可见
+	if t.Status != domain.TutorialStatusPublished && t.UserID != viewerID && !isAdmin {
+		return nil, apperr.ErrTutorialNotFound
+	}
+	if incView && t.Status == domain.TutorialStatusPublished {
 		s.tutorialRepo.IncView(id)
 	}
-	return s.tutorialRepo.GetByID(id, true)
+	return t, nil
 }
 
-func (s *TutorialService) List(page, size int, catID uint64, diff, status, sort, keyword string, userID uint64) ([]*domain.Tutorial, int64, error) {
+// List 公开列表仅返回已发布教程；作者查看自己的列表时可见全部状态。
+func (s *TutorialService) List(page, size int, catID uint64, diff, status, sort, keyword string, userID, viewerID uint64) ([]*domain.Tutorial, int64, error) {
+	if userID > 0 && userID == viewerID {
+		// 作者查看自己的教程，按传入状态过滤（空则全部）
+	} else {
+		status = domain.TutorialStatusPublished
+	}
 	return s.tutorialRepo.List(page, size, catID, diff, status, sort, keyword, userID)
 }
 
@@ -244,10 +259,14 @@ func normalizeDifficulty(d string) string {
 	return domain.DifficultyMedium
 }
 
+// normalizeStatus 归一化作者可设置的状态：发布请求一律进入待审队列，
+// 是否公开由审核流程决定（见 ReviewService）。
 func normalizeStatus(s string) string {
 	switch s {
-	case domain.TutorialStatusDraft, domain.TutorialStatusPublished, domain.TutorialStatusArchived:
+	case domain.TutorialStatusDraft, domain.TutorialStatusArchived:
 		return s
+	case domain.TutorialStatusPublished, domain.TutorialStatusPending:
+		return domain.TutorialStatusPending
 	}
 	return domain.TutorialStatusDraft
 }

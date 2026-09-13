@@ -16,10 +16,11 @@ type TutorialHandler struct {
 	interactSvc  *service.InteractionService
 	categorySvc  *service.CategoryService
 	tagSvc       *service.TagService
+	authSvc      *service.AuthService
 }
 
-func NewTutorialHandler(t *service.TutorialService, i *service.InteractionService, c *service.CategoryService, tg *service.TagService) *TutorialHandler {
-	return &TutorialHandler{tutorialSvc: t, interactSvc: i, categorySvc: c, tagSvc: tg}
+func NewTutorialHandler(t *service.TutorialService, i *service.InteractionService, c *service.CategoryService, tg *service.TagService, a *service.AuthService) *TutorialHandler {
+	return &TutorialHandler{tutorialSvc: t, interactSvc: i, categorySvc: c, tagSvc: tg, authSvc: a}
 }
 
 func (h *TutorialHandler) List(c *gin.Context) {
@@ -28,7 +29,8 @@ func (h *TutorialHandler) List(c *gin.Context) {
 		Fail(c, apperr.Wrap(apperr.CodeValidation, "参数错误", err))
 		return
 	}
-	list, total, err := h.tutorialSvc.List(req.Page, req.Size, req.Category, req.Difficulty, req.Status, req.Sort, req.Keyword, req.UserID)
+	viewerID := middleware.MustLogin(c)
+	list, total, err := h.tutorialSvc.List(req.Page, req.Size, req.Category, req.Difficulty, req.Status, req.Sort, req.Keyword, req.UserID, viewerID)
 	if err != nil {
 		Fail(c, err)
 		return
@@ -89,12 +91,18 @@ func (h *TutorialHandler) Get(c *gin.Context) {
 		Fail(c, apperr.ErrBadRequest)
 		return
 	}
-	t, err := h.tutorialSvc.Get(id, true)
+	uid := middleware.MustLogin(c)
+	isAdmin := false
+	if uid > 0 {
+		if u, err := h.authSvc.GetUserByID(uid); err == nil {
+			isAdmin = u.IsAdmin()
+		}
+	}
+	t, err := h.tutorialSvc.Get(id, true, uid, isAdmin)
 	if err != nil {
 		Fail(c, err)
 		return
 	}
-	uid := middleware.MustLogin(c)
 	var faved bool
 	if uid > 0 {
 		faved, _ = h.interactSvc.IsFavorite(uid, domain.FavTypeTutorial, id)

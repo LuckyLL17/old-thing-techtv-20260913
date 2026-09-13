@@ -51,6 +51,11 @@ function difficultyBadge(d) {
 function levelLabel(l) {
   return { novice: '新手', apprentice: '学徒', craftsman: '匠人', master: '大师' }[l] || '新手';
 }
+function statusBadge(s) {
+  const map = { draft: ['草稿', 'draft'], pending: ['审核中', 'pending'], published: ['已发布', 'published'], rejected: ['已驳回', 'rejected'], archived: ['已归档', 'archived'] };
+  const v = map[s] || map.draft;
+  return `<span class="status-badge status-${v[1]}">${v[0]}</span>`;
+}
 function stars(n) {
   let s = '';
   for (let i = 0; i < 5; i++) s += i < (n|0) ? '★' : '☆';
@@ -72,7 +77,7 @@ function renderUserArea() {
     return;
   }
   const u = state.user;
-  area.innerHTML = `<div class="user-menu">${avatarFor(u)}<span>${u.nickname||u.username}</span><div class="dropdown" id="ud" style="display:none"><a href="#/me">个人中心</a><a href="#/editor">发布教程</a><a href="#/me/projects">我的作品</a><a href="javascript:logout()">退出登录</a></div></div>`;
+  area.innerHTML = `<div class="user-menu">${avatarFor(u)}<span>${u.nickname||u.username}</span><div class="dropdown" id="ud" style="display:none"><a href="#/me">个人中心</a><a href="#/editor">发布教程</a><a href="#/me/projects">我的作品</a><a href="#/me/notifications">通知中心</a>${u.role==='admin'?'<a href="#/admin">🛡 管理后台</a>':''}<a href="javascript:logout()">退出登录</a></div></div>`;
   area.querySelector('.user-menu').onclick = e => { e.stopPropagation(); const d = $('#ud'); d.style.display = d.style.display === 'none' ? 'block' : 'none'; };
   document.body.onclick = () => { const d = $('#ud'); if (d) d.style.display = 'none'; };
 }
@@ -195,6 +200,10 @@ async function viewTutorial(id) {
   const user = t.user || {};
   const cat = t.category || {};
   let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/tutorials">教程</a> / <span>${t.title}</span></div>`;
+  if (t.status && t.status !== 'published') {
+    const isOwner = state.user && state.user.id === t.user_id;
+    h += `<div class="card" style="padding:14px 18px;margin-bottom:16px"><div class="flex" style="flex-wrap:wrap">${statusBadge(t.status)}<span style="color:#888;font-size:13px">${t.status==='pending'?'教程正在审核中，通过后才会公开展示':t.status==='rejected'?'教程未通过审核，修改后可重新提交':t.status==='draft'?'草稿尚未提交审核':'教程已归档，不再公开展示'}</span>${isOwner&&(t.status==='rejected'||t.status==='draft')?`<button class="btn btn-solid" style="margin-left:auto" onclick="submitTutorial(${t.id})">🚀 提交审核</button>`:''}</div>${t.status==='rejected'&&t.review_note?`<div class="review-note">驳回原因：${t.review_note}</div>`:''}</div>`;
+  }
   h += `<div style="display:flex;gap:10px;margin-bottom:10px;align-items:center">${difficultyBadge(t.difficulty)}<span style="color:#888">⏱ ${t.estimated_hours} 小时</span><span>${(t.tags||[]).map(x=>`<span class="tag">#${x.name}</span>`).join('')}</span></div>`;
   h += `<h1 style="font-size:30px;margin-bottom:12px">${t.title}</h1>`;
   h += `<div class="flex-between" style="margin-bottom:18px"><div class="flex">${avatarFor(user)}<div><div style="font-weight:600">${user.nickname||user.username||'匿名'} <span style="color:#7c5cff;font-size:12px">[${levelLabel(user.level)}]</span></div><div style="font-size:12px;color:#888">${timeAgo(t.created_at)} · 👁${t.view_count} ❤️${t.favorite_count} 🛠${t.attempt_count}</div></div></div><div class="flex"><button class="btn btn-outline" onclick="toggleFav('tutorial',${t.id},this)">${fav?'❤️ 已收藏':'🤍 收藏'}</button><button class="btn btn-solid" onclick="attemptTut(${t.id})">🛠 我要尝试</button></div></div>`;
@@ -325,14 +334,20 @@ async function viewMe() {
   let h = `<div class="bread"><a href="#/">首页</a> / 个人中心</div>`;
   h += `<div class="card" style="padding:28px;margin-bottom:24px;display:flex;gap:24px;align-items:center"><div style="width:88px;height:88px;border-radius:50%;background:linear-gradient(135deg,#7c5cff,#3bc9db);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:32px">${(u.nickname||u.username).charAt(0).toUpperCase()}</div><div style="flex:1"><h1 style="font-size:24px;margin-bottom:6px">${u.nickname||u.username} <span style="font-size:13px;color:#7c5cff;background:#f8f5ff;padding:3px 10px;border-radius:999px;">[${levelLabel(s.level)}]</span></h1><div style="color:#888">@${u.username} · ${u.email}</div>${u.specialty?`<div style="margin-top:8px;color:#555">🔧 ${u.specialty}</div>`:''}${u.bio?`<div style="margin-top:6px;color:#555">${u.bio}</div>`:''}</div><div style="text-align:right"><button class="btn btn-outline" onclick="editProfile()">编辑资料</button></div></div>`;
   h += `<div class="grid grid-4" style="margin-bottom:24px"><div class="stat-card"><div class="stat-num">${s.tutorial_count||0}</div><div class="stat-label">发布教程</div></div><div class="stat-card"><div class="stat-num">${s.project_count||0}</div><div class="stat-label">改造作品</div></div><div class="stat-card"><div class="stat-num">${s.favorite_count||0}</div><div class="stat-label">我的收藏</div></div><div class="stat-card"><div class="stat-num">${s.total_items||0}</div><div class="stat-label">累计改造 (件)</div></div><div class="stat-card"><div class="stat-num">${s.attempt_count||0}</div><div class="stat-label">尝试中 (${s.completed_count||0}完成)</div></div><div class="stat-card"><div class="stat-num">${s.score||0}</div><div class="stat-label">总积分</div></div></div>`;
-  h += `<div class="tabs"><div class="tab tab-active">📚 我的教程</div><div class="tab" onclick="location.hash='#/me/projects'">🎨 我的作品</div><div class="tab" onclick="location.hash='#/me/favorites'">⭐ 我的收藏</div><div class="tab" onclick="location.hash='#/me/attempts'">🛠 我的尝试</div><div class="tab" onclick="location.hash='#/me/messages'">✉️ 消息</div></div>`;
-  const tuts = await get('/tutorials?user_id=' + u.id + '&size=20');
+  h += `<div class="tabs"><div class="tab tab-active">📚 我的教程</div><div class="tab" onclick="location.hash='#/me/projects'">🎨 我的作品</div><div class="tab" onclick="location.hash='#/me/favorites'">⭐ 我的收藏</div><div class="tab" onclick="location.hash='#/me/attempts'">🛠 我的尝试</div><div class="tab" onclick="location.hash='#/me/notifications'">🔔 通知</div><div class="tab" onclick="location.hash='#/me/messages'">✉️ 消息</div></div>`;
+  const tuts = await get('/tutorials?user_id=' + u.id + '&size=50');
   if (tuts.data && tuts.data.list && tuts.data.list.length) {
-    h += `<div class="grid grid-4">${renderTutorialCards(tuts.data.list)}</div>`;
+    h += `<div class="grid grid-2">` + tuts.data.list.map(t => `<div class="card" style="padding:16px"><div class="flex-between" style="margin-bottom:6px"><b style="cursor:pointer" onclick="location.hash='#/tutorials/${t.id}'">${t.title}</b>${statusBadge(t.status)}</div><div style="font-size:12px;color:#888">${timeAgo(t.created_at)} · 👁${t.view_count} ❤️${t.favorite_count}</div>${t.status==='rejected'&&t.review_note?`<div class="review-note">驳回原因：${t.review_note}</div>`:''}${t.status==='pending'?`<div style="margin-top:8px;font-size:13px;color:#e67700">⏳ 已提交，等待管理员审核…</div>`:''}<div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-outline" onclick="location.hash='#/tutorials/${t.id}'">查看</button>${(t.status==='draft'||t.status==='rejected')?`<button class="btn btn-solid" onclick="submitTutorial(${t.id})">🚀 提交审核</button>`:''}</div></div>`).join('') + `</div>`;
   } else {
     h += `<div class="empty">还没有发布教程 <a href="#/editor" class="btn btn-solid">现在发布</a></div>`;
   }
   $('#app').innerHTML = h;
+}
+async function submitTutorial(id) {
+  const r = await post('/tutorials/' + id + '/submit', {});
+  if (!r.success) return toast(r.message, 'error');
+  toast('已提交审核，请等待管理员处理', 'success');
+  route();
 }
 function editProfile() {
   const u = state.user;
@@ -356,7 +371,7 @@ async function editorView() {
   h += `<div class="section-title">📦 材料清单</div><div id="mat_list"></div><button class="btn btn-gray" onclick="addMat()">+ 添加材料</button>`;
   h += `<div class="section-title">🔨 工具清单</div><div id="tool_list"></div><button class="btn btn-gray" onclick="addTool()">+ 添加工具</button>`;
   h += `<div class="section-title">📖 步骤说明 <small style="font-size:13px;color:#888">拖拽排序</small></div><div id="step_list"></div><button class="btn btn-gray" onclick="addStep()">+ 添加步骤</button>`;
-  h += `<div style="margin-top:30px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-gray" onclick="saveTutorial(false)">保存草稿</button><button class="btn btn-solid btn-lg" onclick="saveTutorial(true)">🚀 发布教程</button></div></div>`;
+  h += `<div style="margin-top:30px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-gray" onclick="saveTutorial(false)">保存草稿</button><button class="btn btn-solid btn-lg" onclick="saveTutorial(true)">🚀 提交审核</button></div><p style="text-align:right;color:#999;font-size:12px;margin-top:8px">提交后教程进入审核队列，管理员审核通过后才会公开展示</p></div>`;
   $('#app').innerHTML = h;
   addMat(); addTool(); addStep();
 }
@@ -398,7 +413,7 @@ async function saveTutorial(publish) {
   };
   const r = await post('/tutorials', body);
   if (!r.success) return toast(r.message, 'error');
-  toast(publish ? '发布成功！🎉' : '草稿已保存', 'success');
+  toast(publish ? '已提交审核，通过后将公开展示 🎉' : '草稿已保存', 'success');
   location.hash = '#/tutorials/' + r.data.id;
 }
 async function viewMessages() {
@@ -406,6 +421,58 @@ async function viewMessages() {
   let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/me">个人中心</a> / 消息</div><h1 style="font-size:26px;margin-bottom:18px">✉️ 私信</h1>`;
   h += `<div class="empty">此功能测试中 · 敬请期待</div>`;
   $('#app').innerHTML = h;
+}
+async function viewNotifications() {
+  if (!requireLogin()) return;
+  const r = await get('/me/notifications?size=50');
+  if (!r.success) { $('#app').innerHTML = `<div class="empty">${r.message}</div>`; return; }
+  let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/me">个人中心</a> / 通知</div>`;
+  h += `<div class="flex-between" style="margin-bottom:18px"><h1 style="font-size:26px">🔔 通知中心</h1><button class="btn btn-gray" onclick="readAllNotifs()">全部标为已读</button></div>`;
+  const list = (r.data && r.data.list) || [];
+  if (!list.length) { $('#app').innerHTML = h + `<div class="empty">暂无通知</div>`; return; }
+  const icons = { comment: '💬', reply: '↩️', favorite: '❤️', follow: '👤', attempt: '🛠', project: '🎨', like: '👍', system: '📢', audit_pass: '✅', audit_reject: '❌' };
+  h += list.map(n => `<div class="notif-item ${n.read ? '' : 'notif-unread'} notif-${n.type}"><div style="font-size:22px">${icons[n.type] || '📩'}</div><div style="flex:1"><div class="flex-between"><b>${n.title}</b><span style="font-size:12px;color:#aaa">${timeAgo(n.created_at)}</span></div><div style="color:#555;font-size:14px;margin-top:4px">${n.content || ''}</div>${n.tutorial_id ? `<div style="margin-top:6px"><a href="#/tutorials/${n.tutorial_id}" style="color:#7c5cff;font-size:13px">查看相关教程 →</a></div>` : ''}</div>${n.read ? '' : `<button class="btn btn-gray" style="align-self:center" onclick="markNotifRead(${n.id})">标为已读</button>`}</div>`).join('');
+  $('#app').innerHTML = h;
+}
+async function markNotifRead(id) {
+  await post('/me/notifications/' + id + '/read', {});
+  route();
+}
+async function readAllNotifs() {
+  await post('/me/notifications/read-all', {});
+  route();
+}
+async function viewAdmin() {
+  if (!requireLogin()) return;
+  if (!state.user || state.user.role !== 'admin') { $('#app').innerHTML = `<div class="empty">🛡 需要管理员权限</div>`; return; }
+  const qs = parseHashQuery();
+  const status = qs.status || 'pending';
+  const r = await get('/admin/tutorials?status=' + status + '&size=50');
+  if (!r.success) { $('#app').innerHTML = `<div class="empty">${r.message}</div>`; return; }
+  let h = `<div class="bread"><a href="#/">首页</a> / 管理后台</div><h1 style="font-size:26px;margin-bottom:18px">🛡 教程审核</h1>`;
+  h += `<div class="chip-row" style="margin-bottom:18px"><span class="pill ${status === 'pending' ? 'pill-active' : ''}" onclick="setQ('status','pending')">⏳ 待审核</span><span class="pill ${status === 'rejected' ? 'pill-active' : ''}" onclick="setQ('status','rejected')">❌ 已驳回</span><span class="pill ${status === 'published' ? 'pill-active' : ''}" onclick="setQ('status','published')">✅ 已发布</span></div>`;
+  const list = (r.data && r.data.list) || [];
+  if (!list.length) h += `<div class="empty">${status === 'pending' ? '待审队列已清空 🎉' : '暂无记录'}</div>`;
+  h += list.map(t => {
+    const u = t.user || {};
+    return `<div class="admin-row"><img src="${t.cover_after || t.cover_before}" onerror="this.src='https://picsum.photos/seed/a${t.id}/200'"><div style="flex:1"><div class="flex" style="gap:8px;flex-wrap:wrap"><b>${t.title}</b>${statusBadge(t.status)}</div><div style="font-size:13px;color:#888;margin-top:4px">作者：${u.nickname || u.username || '-'} · 提交于 ${timeAgo(t.updated_at || t.created_at)} · 难度 ${t.difficulty} · ${t.estimated_hours}h</div><div style="font-size:13px;color:#555;margin-top:4px">${t.summary || ''}</div>${t.review_note ? `<div class="review-note">上次驳回原因：${t.review_note}</div>` : ''}</div><div style="display:flex;flex-direction:column;gap:8px"><button class="btn btn-outline" onclick="location.hash='#/tutorials/${t.id}'">查看详情</button>${t.status === 'pending' ? `<button class="btn btn-solid" onclick="approveTutorial(${t.id})">✅ 通过</button><button class="btn btn-danger" onclick="rejectTutorial(${t.id})">❌ 驳回</button>` : ''}</div></div>`;
+  }).join('');
+  $('#app').innerHTML = h;
+}
+async function approveTutorial(id) {
+  const r = await post('/admin/tutorials/' + id + '/approve', {});
+  if (!r.success) return toast(r.message, 'error');
+  toast('已通过并公开发布', 'success');
+  route();
+}
+async function rejectTutorial(id) {
+  const reason = prompt('请输入驳回原因（将通过站内通知告知作者）：');
+  if (reason === null) return;
+  if (!reason.trim()) return toast('驳回原因不能为空', 'error');
+  const r = await post('/admin/tutorials/' + id + '/reject', { reason: reason.trim() });
+  if (!r.success) return toast(r.message, 'error');
+  toast('已驳回并通知作者', 'success');
+  route();
 }
 async function viewFavorites() {
   if (!requireLogin()) return;
@@ -479,12 +546,14 @@ async function route() {
       case 'stats': viewStats(); break;
       case 'editor': editorView(); break;
       case 'random': viewRandom(); break;
+      case 'admin': viewAdmin(); break;
       case 'me': {
         const sub = parts[1];
         if (sub === 'projects') viewProjects();
         else if (sub === 'favorites') viewFavorites();
         else if (sub === 'attempts') viewAttempts();
         else if (sub === 'messages') viewMessages();
+        else if (sub === 'notifications') viewNotifications();
         else viewMe();
         break;
       }

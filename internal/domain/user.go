@@ -7,6 +7,8 @@ const (
 	UserLevelApprentice = "apprentice"
 	UserLevelCraftsman  = "craftsman"
 	UserLevelMaster     = "master"
+	RoleUser  = "user"
+	RoleAdmin = "admin"
 )
 
 type User struct {
@@ -19,6 +21,7 @@ type User struct {
 	Specialty     string    `gorm:"size:255" json:"specialty"`
 	Bio           string    `gorm:"type:text" json:"bio"`
 	Level         string    `gorm:"size:20;default:novice" json:"level"`
+	Role          string    `gorm:"size:20;default:user;index" json:"role"`
 	TutorialCount int       `gorm:"default:0" json:"tutorial_count"`
 	ProjectCount  int       `gorm:"default:0" json:"project_count"`
 	Score         int       `gorm:"default:0" json:"score"`
@@ -41,6 +44,10 @@ func (u *User) ComputeLevel() {
 	} else {
 		u.Level = UserLevelNovice
 	}
+}
+
+func (u *User) IsAdmin() bool {
+	return u.Role == RoleAdmin
 }
 
 func (u *User) DisplayName() string {

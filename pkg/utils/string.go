@@ -2,6 +2,7 @@ package utils
 
 import (
 	"crypto/rand"
+	"crypto/sha1"
 	"encoding/hex"
 	"regexp"
 	"strings"
@@ -23,13 +24,20 @@ func Truncate(s string, n int) string {
 }
 
 func Slugify(s string) string {
-	s = strings.ToLower(strings.TrimSpace(s))
+	orig := strings.TrimSpace(s)
+	s = strings.ToLower(orig)
 	reg := regexp.MustCompile(`[^a-z0-9\s-]`)
 	s = reg.ReplaceAllString(s, "")
 	s = strings.ReplaceAll(s, " ", "-")
 	reg2 := regexp.MustCompile(`-+`)
 	s = reg2.ReplaceAllString(s, "-")
-	return strings.Trim(s, "-")
+	s = strings.Trim(s, "-")
+	if s == "" && orig != "" {
+		// 非拉丁字符（如中文）无法生成 slug 时，用内容哈希兜底保证唯一性
+		h := sha1.Sum([]byte(orig))
+		s = "u-" + hex.EncodeToString(h[:])[:12]
+	}
+	return s
 }
 
 func IsValidEmail(email string) bool {
