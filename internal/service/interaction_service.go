@@ -169,7 +169,14 @@ func (s *InteractionService) ListConversations(userID uint64) ([]*domain.Convers
 		return nil, err
 	}
 	for _, c := range list {
-		c.User = users[c.OtherID]
+		if u, ok := users[c.OtherID]; ok {
+			c.User = &domain.ConversationUser{
+				ID:       u.ID,
+				Username: u.Username,
+				Nickname: u.Nickname,
+				Avatar:   u.Avatar,
+			}
+		}
 	}
 	return list, nil
 }

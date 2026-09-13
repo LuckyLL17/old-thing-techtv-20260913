@@ -444,11 +444,11 @@ async function viewMessages(otherId) {
   if (otherId) viewChat(otherId);
   else viewConversationList();
 }
-async function viewConversationList() {
-  const r = await get('/me/messages/conversations');
-  if (!r.success) { $('#app').innerHTML = `<div class="empty">${r.message}</div>`; return; }
-  const list = r.data || [];
-  let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/me">个人中心</a> / 消息</div>`;
+function convSignature(list) {
+  return (list || []).map(c => `${c.other_id}:${c.unread}:${c.last_sender_id}:${c.last_content}:${c.last_at}`).join('|');
+}
+function renderConversationList(list) {
+  let h = `<div id="convRoot"><div class="bread"><a href="#/">首页</a> / <a href="#/me">个人中心</a> / 消息</div>`;
   h += `<h1 style="font-size:26px;margin-bottom:18px">✉️ 私信</h1>`;
   if (!list.length) {
     h += `<div class="empty"><div class="empty-icon">📭</div>还没有私信对话<div style="font-size:13px;margin-top:8px">去教程或作品页，点“私信”和创作者聊聊吧~</div></div>`;
@@ -467,13 +467,31 @@ async function viewConversationList() {
       </a>`;
     }).join('')}</div>`;
   }
+  h += `</div>`;
   $('#app').innerHTML = h;
+}
+async function viewConversationList() {
+  const r = await get('/me/messages/conversations');
+  if (!r.success) { $('#app').innerHTML = `<div class="empty">${r.message}</div>`; return; }
+  const list = r.data || [];
+  let sig = convSignature(list);
+  renderConversationList(list);
   refreshUnread(true);
-  // 定期刷新，新到达的消息会更新未读数和排序
+  // 列表页只保留这一个刷新任务：回调仅拉数据并纯渲染，绝不再新建定时器
   msgTimer = setInterval(async () => {
-    if (location.hash.split('?')[0] !== '#/me/messages') { stopMsgPolling(); return; }
+    if (location.hash.split('?')[0] !== '#/me/messages' || !document.getElementById('convRoot')) {
+      stopMsgPolling();
+      return;
+    }
     const rr = await get('/me/messages/conversations');
-    if (rr.success && !$('#chatInput')) viewConversationList();
+    if (!rr.success) return;
+    const next = rr.data || [];
+    const nextSig = convSignature(next);
+    if (nextSig === sig) return; // 无变化不重绘，避免打断滚动/闪烁
+    sig = nextSig;
+    const y = window.scrollY;
+    renderConversationList(next);
+    window.scrollTo(0, y);
   }, 15000);
 }
 function chatDay(t) {
