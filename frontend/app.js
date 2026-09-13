@@ -165,6 +165,7 @@ async function viewTutorials() {
 function setQ(k, v) {
   const q = parseHashQuery();
   q[k] = v; state.page = 1;
+  delete q.page;
   const base = location.hash.split('?')[0] || '#/tutorials';
   location.hash = base + '?' + new URLSearchParams(q).toString();
 }
@@ -175,15 +176,28 @@ function parseHashQuery() {
   const o = {}; p.forEach((v, k) => o[k] = v);
   return o;
 }
+// 翻页通过 hash 携带 page 参数，route() 会从 URL 恢复 state.page
+function gotoPage(n) {
+  const q = parseHashQuery();
+  q.page = n;
+  const base = location.hash.split('?')[0] || '#/';
+  const hash = base + '?' + new URLSearchParams(q).toString();
+  if (hash === location.hash) {
+    state.page = n;
+    route();
+  } else {
+    location.hash = hash;
+  }
+}
 function pagination(total, page, size) {
   const pages = Math.ceil(total / size) || 1;
   if (pages <= 1) return '';
   let h = `<div class="pagination">`;
-  if (page > 1) h += `<button class="page-btn" onclick="state.page=${page-1};route()">‹</button>`;
+  if (page > 1) h += `<button class="page-btn" onclick="gotoPage(${page-1})">‹</button>`;
   for (let i = Math.max(1, page-2); i <= Math.min(pages, page+2); i++) {
-    h += `<button class="page-btn ${i===page?'page-btn-active':''}" onclick="state.page=${i};route()">${i}</button>`;
+    h += `<button class="page-btn ${i===page?'page-btn-active':''}" onclick="gotoPage(${i})">${i}</button>`;
   }
-  if (page < pages) h += `<button class="page-btn" onclick="state.page=${page+1};route()">›</button>`;
+  if (page < pages) h += `<button class="page-btn" onclick="gotoPage(${page+1})">›</button>`;
   h += `</div>`;
   return h;
 }
