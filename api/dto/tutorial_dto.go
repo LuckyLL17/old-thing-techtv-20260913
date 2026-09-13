@@ -1,5 +1,7 @@
 package dto
 
+import "time"
+
 type TutorialListReq struct {
 	Page     int    `form:"page,default=1"`
 	Size     int    `form:"size,default=10"`
@@ -35,10 +37,15 @@ type TutorialCreateReq struct {
 	Difficulty     string       `json:"difficulty"`
 	EstimatedHours float64      `json:"estimated_hours"`
 	Status         string       `json:"status"`
+	ScheduledAt    *time.Time   `json:"scheduled_at"`
 	Tags           []string     `json:"tags"`
 	Steps          []*StepIn    `json:"steps"`
 	Materials      []*MaterialIn `json:"materials"`
 	Tools          []*MaterialIn `json:"tools"`
+}
+
+type ScheduleReq struct {
+	ScheduledAt *time.Time `json:"scheduled_at" binding:"required"`
 }
 
 type ReorderStepsReq struct {

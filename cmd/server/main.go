@@ -95,9 +95,11 @@ func main() {
 	auditSvc := service.NewAuditService(auditRepo)
 	historySvc := service.NewTutorialHistoryService(versionRepo, tutorialRepo, stepRepo, materialRepo, toolRepo)
 	updater := worker.NewStatsUpdater(userRepo, tutorialRepo, commentRepo, categoryRepo, tagRepo)
+	publishScheduler := worker.NewPublishScheduler(tutorialSvc)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	updater.Start(ctx)
+	publishScheduler.Start(ctx)
 	r := api.SetupRouter(&api.Deps{
 		Cfg: cfg, AuthSvc: authSvc, TutorialSvc: tutorialSvc,
 		ProjectSvc: projectSvc, CategorySvc: categorySvc, TagSvc: tagSvc,
@@ -123,6 +125,7 @@ func main() {
 	<-quit
 	logger.Info("正在关闭服务...")
 	updater.Stop()
+	publishScheduler.Stop()
 	sctx, scancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer scancel()
 	if err := srv.Shutdown(sctx); err != nil {

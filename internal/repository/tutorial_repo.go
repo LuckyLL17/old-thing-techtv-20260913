@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"time"
 	"upcycle-hub/internal/domain"
 	apperr "upcycle-hub/pkg/errors"
 
@@ -92,7 +93,7 @@ func (r *TutorialRepo) List(page, size int, catID uint64, diff, status, sort, ke
 	case "views":
 		orderExpr = "view_count DESC"
 	case "new":
-		orderExpr = "created_at DESC"
+		orderExpr = "COALESCE(published_at, created_at) DESC"
 	}
 	if size > 0 {
 		q = q.Offset((page - 1) * size).Limit(size)
@@ -204,4 +205,31 @@ func (r *TutorialRepo) CountByMonth(n int) ([]int64, error) {
 
 func (r *TutorialRepo) SaveVersion(v *domain.TutorialVersion) error {
 	return r.db.Create(v).Error
+}
+
+// ListDueScheduled 返回所有已到发布时间的定时教程
+func (r *TutorialRepo) ListDueScheduled(now time.Time) ([]*domain.Tutorial, error) {
+	var list []*domain.Tutorial
+	err := r.db.Where("status = ? AND scheduled_at IS NOT NULL AND scheduled_at <= ?", domain.TutorialStatusScheduled, now).
+		Order("scheduled_at ASC").Find(&list).Error
+	if err != nil {
+		return nil, apperr.Wrap(apperr.CodeDB, "查询待发布教程失败", err)
+	}
+	return list, nil
+}
+
+// PublishIfScheduled 条件更新：仅当教程仍处于 scheduled 状态时才发布，
+// 避免与作者手动操作（取消定时/立即发布）并发时重复执行。返回是否真正生效。
+func (r *TutorialRepo) PublishIfScheduled(id uint64, now time.Time) (bool, error) {
+	res := r.db.Model(&domain.Tutorial{}).
+		Where("id = ? AND status = ?", id, domain.TutorialStatusScheduled).
+		Updates(map[string]interface{}{
+			"status":       domain.TutorialStatusPublished,
+			"scheduled_at": nil,
+			"published_at": now,
+		})
+	if res.Error != nil {
+		return false, apperr.Wrap(apperr.CodeDB, "定时发布失败", res.Error)
+	}
+	return res.RowsAffected > 0, nil
 }

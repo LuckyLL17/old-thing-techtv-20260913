@@ -134,7 +134,11 @@ function renderTutorialCards(list) {
   return list.map(t => {
     const user = t.user || {};
     const cat = t.category || {};
-    return `<div class="card" onclick="location.hash='#/tutorials/${t.id}'"><div class="before-after"><img src="${t.cover_before||'https://picsum.photos/seed/b'+t.id+'/400'}" onerror="this.src='https://picsum.photos/seed/b'+${t.id}+'/400'" alt="改造前"><img src="${t.cover_after||'https://picsum.photos/seed/a'+t.id+'/400'}" onerror="this.src='https://picsum.photos/seed/a'+${t.id}+'/400'" alt="改造后"></div><div class="meta"><span>👁 ${t.view_count}</span><span>❤️ ${t.favorite_count}</span><span>🛠 ${t.attempt_count}</span><span>${(t.tags||[]).slice(0,2).map(x=>`<span class="tag">#${x.name}</span>`).join('')}</span></div><div class="card-body"><div class="card-title">${t.title}</div><div class="flex" style="justify-content:space-between;margin-top:8px"><div class="flex">${avatarFor(user)}<span style="font-size:13px;color:#666">${user.nickname||user.username||'匿名'}</span></div><div style="font-size:12px">${difficultyBadge(t.difficulty)} · ${t.estimated_hours}h</div></div></div></div>`;
+    let statusBadge = '';
+    if (t.status === 'scheduled' && t.scheduled_at) statusBadge = `<span style="color:#8a6d00">⏰ ${new Date(t.scheduled_at).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})} 发布</span>`;
+    else if (t.status === 'draft') statusBadge = `<span style="color:#888">📝 草稿</span>`;
+    else if (t.status === 'archived') statusBadge = `<span style="color:#888">📦 已归档</span>`;
+    return `<div class="card" onclick="location.hash='#/tutorials/${t.id}'"><div class="before-after"><img src="${t.cover_before||'https://picsum.photos/seed/b'+t.id+'/400'}" onerror="this.src='https://picsum.photos/seed/b'+${t.id}+'/400'" alt="改造前"><img src="${t.cover_after||'https://picsum.photos/seed/a'+t.id+'/400'}" onerror="this.src='https://picsum.photos/seed/a'+${t.id}+'/400'" alt="改造后"></div><div class="meta"><span>👁 ${t.view_count}</span><span>❤️ ${t.favorite_count}</span><span>🛠 ${t.attempt_count}</span>${statusBadge}<span>${(t.tags||[]).slice(0,2).map(x=>`<span class="tag">#${x.name}</span>`).join('')}</span></div><div class="card-body"><div class="card-title">${t.title}</div><div class="flex" style="justify-content:space-between;margin-top:8px"><div class="flex">${avatarFor(user)}<span style="font-size:13px;color:#666">${user.nickname||user.username||'匿名'}</span></div><div style="font-size:12px">${difficultyBadge(t.difficulty)} · ${t.estimated_hours}h</div></div></div></div>`;
   }).join('');
 }
 function renderProjectCards(list) {
@@ -328,7 +332,13 @@ async function viewMe() {
   h += `<div class="tabs"><div class="tab tab-active">📚 我的教程</div><div class="tab" onclick="location.hash='#/me/projects'">🎨 我的作品</div><div class="tab" onclick="location.hash='#/me/favorites'">⭐ 我的收藏</div><div class="tab" onclick="location.hash='#/me/attempts'">🛠 我的尝试</div><div class="tab" onclick="location.hash='#/me/messages'">✉️ 消息</div></div>`;
   const tuts = await get('/tutorials?user_id=' + u.id + '&size=20');
   if (tuts.data && tuts.data.list && tuts.data.list.length) {
-    h += `<div class="grid grid-4">${renderTutorialCards(tuts.data.list)}</div>`;
+    h += `<div class="grid grid-4">${tuts.data.list.map(t => {
+      const card = renderTutorialCards([t]);
+      let actions = '';
+      if (t.status === 'scheduled') actions = `<div style="margin-top:6px;display:flex;gap:6px"><button class="btn btn-solid" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();publishNow(${t.id})">🚀 立即发布</button><button class="btn btn-gray" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();cancelSchedule(${t.id})">取消定时</button></div>`;
+      else if (t.status === 'draft') actions = `<div style="margin-top:6px"><button class="btn btn-solid" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();publishNow(${t.id})">🚀 立即发布</button></div>`;
+      return actions ? `<div>${card}${actions}</div>` : card;
+    }).join('')}</div>`;
   } else {
     h += `<div class="empty">还没有发布教程 <a href="#/editor" class="btn btn-solid">现在发布</a></div>`;
   }
@@ -356,7 +366,8 @@ async function editorView() {
   h += `<div class="section-title">📦 材料清单</div><div id="mat_list"></div><button class="btn btn-gray" onclick="addMat()">+ 添加材料</button>`;
   h += `<div class="section-title">🔨 工具清单</div><div id="tool_list"></div><button class="btn btn-gray" onclick="addTool()">+ 添加工具</button>`;
   h += `<div class="section-title">📖 步骤说明 <small style="font-size:13px;color:#888">拖拽排序</small></div><div id="step_list"></div><button class="btn btn-gray" onclick="addStep()">+ 添加步骤</button>`;
-  h += `<div style="margin-top:30px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-gray" onclick="saveTutorial(false)">保存草稿</button><button class="btn btn-solid btn-lg" onclick="saveTutorial(true)">🚀 发布教程</button></div></div>`;
+  h += `<div class="section-title">⏰ 定时发布 <small style="font-size:13px;color:#888">可选，到点自动公开，未公开前仅自己可见</small></div><div style="display:flex;gap:10px;align-items:center"><input class="input" type="datetime-local" id="e_sched" style="max-width:280px"><span style="font-size:13px;color:#888">设置后点「定时发布」生效</span></div>`;
+  h += `<div style="margin-top:30px;display:flex;gap:10px;justify-content:flex-end"><button class="btn btn-gray" onclick="saveTutorial('draft')">保存草稿</button><button class="btn btn-outline" onclick="saveTutorial('scheduled')">⏰ 定时发布</button><button class="btn btn-solid btn-lg" onclick="saveTutorial('published')">🚀 立即发布</button></div></div>`;
   $('#app').innerHTML = h;
   addMat(); addTool(); addStep();
 }
@@ -380,7 +391,7 @@ function addStep() {
 function renumSteps() {
   $$('#step_list .step-index').forEach((el, i) => el.textContent = i + 1);
 }
-async function saveTutorial(publish) {
+async function saveTutorial(mode) {
   const title = $('#e_title').value.trim();
   const cb = $('#e_cb').value.trim(); const ca = $('#e_ca').value.trim();
   if (!title || !cb || !ca) return toast('请填写必填项：标题 + 改造前后图片', 'error');
@@ -392,14 +403,31 @@ async function saveTutorial(publish) {
     category_id: parseInt($('#e_cat').value), title, summary: $('#e_sum').value,
     cover_before: cb, cover_after: ca, difficulty: $('#e_diff').value,
     estimated_hours: parseFloat($('#e_hours').value)||1,
-    status: publish ? 'published' : 'draft',
+    status: mode === 'published' ? 'published' : 'draft',
     tags: ($('#e_tags').value.split(/[,，]/).map(x=>x.trim()).filter(Boolean)),
     materials, tools, steps
   };
+  if (mode === 'scheduled') {
+    const v = $('#e_sched').value;
+    if (!v) return toast('请先选择定时发布时间', 'error');
+    const at = new Date(v);
+    if (isNaN(at.getTime()) || at.getTime() <= Date.now()) return toast('定时发布时间必须晚于当前时间', 'error');
+    body.scheduled_at = at.toISOString();
+  }
   const r = await post('/tutorials', body);
   if (!r.success) return toast(r.message, 'error');
-  toast(publish ? '发布成功！🎉' : '草稿已保存', 'success');
+  toast(mode === 'published' ? '发布成功！🎉' : mode === 'scheduled' ? '已设置定时发布 ⏰' : '草稿已保存', 'success');
   location.hash = '#/tutorials/' + r.data.id;
+}
+async function publishNow(id) {
+  const r = await post('/tutorials/' + id + '/publish', {});
+  if (!r.success) return toast(r.message, 'error');
+  toast('已立即发布 🎉', 'success'); route();
+}
+async function cancelSchedule(id) {
+  const r = await post('/tutorials/' + id + '/schedule', null, true, 'DELETE');
+  if (!r.success) return toast(r.message, 'error');
+  toast('已取消定时，回到草稿', 'success'); route();
 }
 async function viewMessages() {
   if (!requireLogin()) return;

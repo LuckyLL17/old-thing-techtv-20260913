@@ -5,6 +5,7 @@ import "time"
 const (
 	TutorialStatusDraft     = "draft"
 	TutorialStatusPublished = "published"
+	TutorialStatusScheduled = "scheduled"
 	TutorialStatusArchived  = "archived"
 	DifficultyEasy          = "easy"
 	DifficultyMedium        = "medium"
@@ -32,6 +33,8 @@ type Tutorial struct {
 	Difficulty    string    `gorm:"size:20;default:medium" json:"difficulty"`
 	EstimatedHours float64  `gorm:"default:1" json:"estimated_hours"`
 	Status        string    `gorm:"size:20;default:draft" json:"status"`
+	ScheduledAt   *time.Time `gorm:"index" json:"scheduled_at,omitempty"`
+	PublishedAt   *time.Time `json:"published_at,omitempty"`
 	Version       int       `gorm:"default:1" json:"version"`
 	ViewCount     int       `gorm:"default:0;index" json:"view_count"`
 	FavoriteCount int       `gorm:"default:0" json:"favorite_count"`

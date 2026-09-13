@@ -66,11 +66,14 @@ func SetupRouter(d *Deps) *gin.Engine {
 	}
 	tuts := api.Group("/tutorials")
 	{
-		tuts.GET("", tutH.List)
+		tuts.GET("", middleware.OptionalAuth(d.AuthSvc), tutH.List)
 		tuts.GET("/:id", middleware.OptionalAuth(d.AuthSvc), tutH.Get)
 		tuts.POST("", middleware.Auth(d.AuthSvc), tutH.Create)
 		tuts.PUT("/:id", middleware.Auth(d.AuthSvc), tutH.Update)
 		tuts.DELETE("/:id", middleware.Auth(d.AuthSvc), tutH.Delete)
+		tuts.POST("/:id/schedule", middleware.Auth(d.AuthSvc), tutH.Schedule)
+		tuts.DELETE("/:id/schedule", middleware.Auth(d.AuthSvc), tutH.CancelSchedule)
+		tuts.POST("/:id/publish", middleware.Auth(d.AuthSvc), tutH.Publish)
 		tuts.POST("/:id/reorder", middleware.Auth(d.AuthSvc), tutH.ReorderSteps)
 		tuts.GET("/:id/comments", tutH.Comments)
 		tuts.POST("/:id/comments", middleware.Auth(d.AuthSvc), tutH.AddComment)

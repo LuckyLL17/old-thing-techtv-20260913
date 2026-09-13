@@ -28,6 +28,11 @@ func (h *TutorialHandler) List(c *gin.Context) {
 		Fail(c, apperr.Wrap(apperr.CodeValidation, "参数错误", err))
 		return
 	}
+	// 非作者本人只能看到已发布内容，定时中/草稿不对外暴露
+	uid := middleware.MustLogin(c)
+	if req.UserID == 0 || req.UserID != uid {
+		req.Status = domain.TutorialStatusPublished
+	}
 	list, total, err := h.tutorialSvc.List(req.Page, req.Size, req.Category, req.Difficulty, req.Status, req.Sort, req.Keyword, req.UserID)
 	if err != nil {
 		Fail(c, err)
@@ -57,6 +62,7 @@ func (h *TutorialHandler) Create(c *gin.Context) {
 		Difficulty:     req.Difficulty,
 		EstimatedHours: req.EstimatedHours,
 		Status:         req.Status,
+		ScheduledAt:    req.ScheduledAt,
 		TagNames:       req.Tags,
 	}
 	for _, s := range req.Steps {
@@ -89,17 +95,82 @@ func (h *TutorialHandler) Get(c *gin.Context) {
 		Fail(c, apperr.ErrBadRequest)
 		return
 	}
-	t, err := h.tutorialSvc.Get(id, true)
+	uid := middleware.MustLogin(c)
+	t, err := h.tutorialSvc.Get(id, uid, true)
 	if err != nil {
 		Fail(c, err)
 		return
 	}
-	uid := middleware.MustLogin(c)
 	var faved bool
 	if uid > 0 {
 		faved, _ = h.interactSvc.IsFavorite(uid, domain.FavTypeTutorial, id)
 	}
 	OK(c, gin.H{"tutorial": t, "favorited": faved})
+}
+
+// Schedule 设置/修改定时发布
+func (h *TutorialHandler) Schedule(c *gin.Context) {
+	uid := middleware.MustLogin(c)
+	if uid == 0 {
+		Fail(c, apperr.ErrUnauthorized)
+		return
+	}
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		Fail(c, apperr.ErrBadRequest)
+		return
+	}
+	var req dto.ScheduleReq
+	if err := c.ShouldBindJSON(&req); err != nil || req.ScheduledAt == nil {
+		Fail(c, apperr.Wrap(apperr.CodeValidation, "参数错误：需要 scheduled_at", err))
+		return
+	}
+	t, err := h.tutorialSvc.Schedule(id, uid, *req.ScheduledAt)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, t)
+}
+
+// CancelSchedule 取消定时发布，回到草稿
+func (h *TutorialHandler) CancelSchedule(c *gin.Context) {
+	uid := middleware.MustLogin(c)
+	if uid == 0 {
+		Fail(c, apperr.ErrUnauthorized)
+		return
+	}
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		Fail(c, apperr.ErrBadRequest)
+		return
+	}
+	t, err := h.tutorialSvc.CancelSchedule(id, uid)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, t)
+}
+
+// Publish 立即发布（草稿或定时中的教程）
+func (h *TutorialHandler) Publish(c *gin.Context) {
+	uid := middleware.MustLogin(c)
+	if uid == 0 {
+		Fail(c, apperr.ErrUnauthorized)
+		return
+	}
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		Fail(c, apperr.ErrBadRequest)
+		return
+	}
+	t, err := h.tutorialSvc.PublishNow(id, uid)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, t)
 }
 
 func (h *TutorialHandler) Update(c *gin.Context) {
@@ -128,6 +199,7 @@ func (h *TutorialHandler) Update(c *gin.Context) {
 		Difficulty:     req.Difficulty,
 		EstimatedHours: req.EstimatedHours,
 		Status:         req.Status,
+		ScheduledAt:    req.ScheduledAt,
 		TagNames:       req.Tags,
 	}
 	for _, s := range req.Steps {
