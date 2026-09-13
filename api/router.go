@@ -100,6 +100,7 @@ func SetupRouter(d *Deps) *gin.Engine {
 		me.POST("/follow", statsH.Follow)
 		me.DELETE("/follow/:id", statsH.Unfollow)
 		me.POST("/messages", statsH.SendMessage)
+		me.GET("/messages/conversations", statsH.Conversations)
 		me.GET("/messages/:id", statsH.Messages)
 		me.GET("/unread", statsH.Unread)
 		me.GET("/notifications", notifH.List)
@@ -113,6 +114,7 @@ func SetupRouter(d *Deps) *gin.Engine {
 		admin.GET("/audit", auditH.List)
 		admin.GET("/audit/stats", auditH.Stats)
 	}
+	api.GET("/users/:id", middleware.OptionalAuth(d.AuthSvc), statsH.UserProfile)
 	api.GET("/users/:id/follow", middleware.OptionalAuth(d.AuthSvc), statsH.FollowInfo)
 	api.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "version": "1.0"})

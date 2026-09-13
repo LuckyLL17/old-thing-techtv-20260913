@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"upcycle-hub/internal/domain"
 	"upcycle-hub/internal/repository"
 )
@@ -11,13 +12,16 @@ type InteractionService struct {
 	attemptRepo  *repository.AttemptRepo
 	followRepo   *repository.FollowRepo
 	messageRepo  *repository.MessageRepo
+	userRepo     *repository.UserRepo
 	tutorialRepo *repository.TutorialRepo
 	projectRepo  *repository.ProjectRepo
 }
 
 func NewInteractionService(cr *repository.CommentRepo, fr *repository.FavoriteRepo, ar *repository.AttemptRepo,
-	flr *repository.FollowRepo, mr *repository.MessageRepo, tur *repository.TutorialRepo, pr *repository.ProjectRepo) *InteractionService {
-	return &InteractionService{commentRepo: cr, favoriteRepo: fr, attemptRepo: ar, followRepo: flr, messageRepo: mr, tutorialRepo: tur, projectRepo: pr}
+	flr *repository.FollowRepo, mr *repository.MessageRepo, ur *repository.UserRepo,
+	tur *repository.TutorialRepo, pr *repository.ProjectRepo) *InteractionService {
+	return &InteractionService{commentRepo: cr, favoriteRepo: fr, attemptRepo: ar, followRepo: flr,
+		messageRepo: mr, userRepo: ur, tutorialRepo: tur, projectRepo: pr}
 }
 
 func (s *InteractionService) Comment(userID uint64, targetType string, targetID uint64, content string, parentID uint64) (*domain.Comment, error) {
@@ -116,24 +120,66 @@ func (s *InteractionService) FollowCounts(userID uint64) (int64, int64, error) {
 	return s.followRepo.Counts(userID)
 }
 
-func (s *InteractionService) SendMessage(senderID, receiverID uint64, content string) error {
+const maxMessageLen = 2000
+
+func (s *InteractionService) SendMessage(senderID, receiverID uint64, content string) (*domain.Message, error) {
+	content = strings.TrimSpace(content)
 	if content == "" {
-		return ErrValidation("消息内容不能为空")
+		return nil, ErrValidation("消息内容不能为空")
+	}
+	if len([]rune(content)) > maxMessageLen {
+		return nil, ErrValidation("消息内容过长")
 	}
 	if senderID == receiverID {
-		return ErrValidation("不能给自己发消息")
+		return nil, ErrValidation("不能给自己发消息")
+	}
+	receiver, err := s.userRepo.GetByID(receiverID)
+	if err != nil {
+		return nil, err
+	}
+	if receiver.Status != 1 {
+		return nil, ErrValidation("该用户当前无法接收消息")
 	}
 	m := &domain.Message{SenderID: senderID, ReceiverID: receiverID, Content: content}
-	return s.messageRepo.Send(m)
+	if err := s.messageRepo.Send(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
-func (s *InteractionService) ListMessages(userID, otherID uint64, page, size int) ([]*domain.Message, error) {
-	_ = s.messageRepo.MarkRead(userID, otherID)
-	return s.messageRepo.List(userID, otherID, page, size)
+// ListMessages 返回与 otherID 的完整聊天历史（时间正序），并把对方发来的未读标记为已读
+func (s *InteractionService) ListMessages(userID, otherID uint64) ([]*domain.Message, error) {
+	if err := s.messageRepo.MarkRead(userID, otherID); err != nil {
+		return nil, err
+	}
+	return s.messageRepo.List(userID, otherID, 1, 0)
+}
+
+func (s *InteractionService) ListConversations(userID uint64) ([]*domain.Conversation, error) {
+	list, err := s.messageRepo.ListConversations(userID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uint64, 0, len(list))
+	for _, c := range list {
+		ids = append(ids, c.OtherID)
+	}
+	users, err := s.userRepo.GetByIDs(ids)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range list {
+		c.User = users[c.OtherID]
+	}
+	return list, nil
 }
 
 func (s *InteractionService) UnreadCount(userID uint64) (int64, error) {
 	return s.messageRepo.UnreadCount(userID)
+}
+
+func (s *InteractionService) GetUserProfile(userID uint64) (*domain.User, error) {
+	return s.userRepo.GetByID(userID)
 }
 
 func (s *InteractionService) MarkAttempt(userID, tutorialID uint64, completed bool, note string) error {

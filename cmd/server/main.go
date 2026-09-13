@@ -90,7 +90,7 @@ func main() {
 	searchSvc := service.NewSearchService(tutorialRepo, tagRepo, categoryRepo)
 	recommendSvc := service.NewRecommendService(tutorialRepo, tagRepo, categoryRepo)
 	statsSvc := service.NewStatsService(tutorialRepo, projectRepo, userRepo, categoryRepo, favoriteRepo, attemptRepo)
-	interactSvc := service.NewInteractionService(commentRepo, favoriteRepo, attemptRepo, followRepo, messageRepo, tutorialRepo, projectRepo)
+	interactSvc := service.NewInteractionService(commentRepo, favoriteRepo, attemptRepo, followRepo, messageRepo, userRepo, tutorialRepo, projectRepo)
 	notifSvc := service.NewNotificationService(notifRepo)
 	auditSvc := service.NewAuditService(auditRepo)
 	historySvc := service.NewTutorialHistoryService(versionRepo, tutorialRepo, stepRepo, materialRepo, toolRepo)

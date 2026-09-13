@@ -1,7 +1,18 @@
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const API = '/api/v1';
-const state = { token: localStorage.getItem('token') || '', user: null, page: 1, size: 12 };
+const state = { token: localStorage.getItem('token') || '', user: null, page: 1, size: 12, unread: 0 };
+let unreadTimer = null;
+async function refreshUnread(silent) {
+  if (!state.token) { state.unread = 0; renderUserArea(); return; }
+  const r = await get('/me/unread');
+  if (r.success) {
+    state.unread = r.data.unread || 0;
+    renderUserArea();
+  } else if (!silent) {
+    toast(r.message, 'error');
+  }
+}
 
 function headers(auth = true) {
   const h = { 'Content-Type': 'application/json' };
@@ -72,12 +83,19 @@ function renderUserArea() {
     return;
   }
   const u = state.user;
-  area.innerHTML = `<div class="user-menu">${avatarFor(u)}<span>${u.nickname||u.username}</span><div class="dropdown" id="ud" style="display:none"><a href="#/me">个人中心</a><a href="#/editor">发布教程</a><a href="#/me/projects">我的作品</a><a href="javascript:logout()">退出登录</a></div></div>`;
+  const badge = state.unread > 0 ? `<span class="nav-badge">${state.unread > 99 ? '99+' : state.unread}</span>` : '';
+  area.innerHTML = `<div class="user-menu">${avatarFor(u)}<span>${u.nickname||u.username}</span><div class="dropdown" id="ud" style="display:none"><a href="#/me">个人中心</a><a href="#/editor">发布教程</a><a href="#/me/projects">我的作品</a><a href="#/me/messages">✉️ 私信${badge}</a><a href="javascript:logout()">退出登录</a></div></div>`;
   area.querySelector('.user-menu').onclick = e => { e.stopPropagation(); const d = $('#ud'); d.style.display = d.style.display === 'none' ? 'block' : 'none'; };
   document.body.onclick = () => { const d = $('#ud'); if (d) d.style.display = 'none'; };
 }
+function startUnreadPolling() {
+  if (unreadTimer) return;
+  refreshUnread(true);
+  unreadTimer = setInterval(() => refreshUnread(true), 30000);
+}
 function logout() {
-  state.token = ''; state.user = null;
+  state.token = ''; state.user = null; state.unread = 0;
+  if (unreadTimer) { clearInterval(unreadTimer); unreadTimer = null; }
   localStorage.removeItem('token');
   toast('已退出', 'success');
   renderUserArea(); route();
@@ -93,7 +111,7 @@ function showLogin() {
     state.token = r.data.token; state.user = r.data.user;
     localStorage.setItem('token', state.token);
     toast('登录成功', 'success');
-    m.remove(); renderUserArea(); route();
+    m.remove(); renderUserArea(); startUnreadPolling(); route();
   };
 }
 function showRegister() {
@@ -107,7 +125,7 @@ function showRegister() {
     state.token = r.data.token; state.user = r.data.user;
     localStorage.setItem('token', state.token);
     toast('注册成功', 'success');
-    m.remove(); renderUserArea(); route();
+    m.remove(); renderUserArea(); startUnreadPolling(); route();
   };
 }
 function requireLogin() {
@@ -197,7 +215,8 @@ async function viewTutorial(id) {
   let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/tutorials">教程</a> / <span>${t.title}</span></div>`;
   h += `<div style="display:flex;gap:10px;margin-bottom:10px;align-items:center">${difficultyBadge(t.difficulty)}<span style="color:#888">⏱ ${t.estimated_hours} 小时</span><span>${(t.tags||[]).map(x=>`<span class="tag">#${x.name}</span>`).join('')}</span></div>`;
   h += `<h1 style="font-size:30px;margin-bottom:12px">${t.title}</h1>`;
-  h += `<div class="flex-between" style="margin-bottom:18px"><div class="flex">${avatarFor(user)}<div><div style="font-weight:600">${user.nickname||user.username||'匿名'} <span style="color:#7c5cff;font-size:12px">[${levelLabel(user.level)}]</span></div><div style="font-size:12px;color:#888">${timeAgo(t.created_at)} · 👁${t.view_count} ❤️${t.favorite_count} 🛠${t.attempt_count}</div></div></div><div class="flex"><button class="btn btn-outline" onclick="toggleFav('tutorial',${t.id},this)">${fav?'❤️ 已收藏':'🤍 收藏'}</button><button class="btn btn-solid" onclick="attemptTut(${t.id})">🛠 我要尝试</button></div></div>`;
+  const isOwnTutorial = state.user && state.user.id === user.id;
+  h += `<div class="flex-between" style="margin-bottom:18px"><div class="flex">${avatarFor(user)}<div><div style="font-weight:600">${user.nickname||user.username||'匿名'} <span style="color:#7c5cff;font-size:12px">[${levelLabel(user.level)}]</span></div><div style="font-size:12px;color:#888">${timeAgo(t.created_at)} · 👁${t.view_count} ❤️${t.favorite_count} 🛠${t.attempt_count}</div></div></div><div class="flex"><button class="btn btn-outline" onclick="toggleFav('tutorial',${t.id},this)">${fav?'❤️ 已收藏':'🤍 收藏'}</button>${isOwnTutorial?'':`<button class="btn btn-outline" onclick="startChat(${user.id||0})">✉️ 私信</button>`}<button class="btn btn-solid" onclick="attemptTut(${t.id})">🛠 我要尝试</button></div></div>`;
   h += `<div class="before-after" style="margin-bottom:24px"><div><div style="padding:6px 12px;background:#ffe3e3;color:#c92a2a;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;display:inline-block">改造前</div><img src="${t.cover_before}" style="border-radius:0 14px 14px 14px;width:100%;height:300px;object-fit:cover"></div><div><div style="padding:6px 12px;background:#d3f9d8;color:#2b8a3e;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;display:inline-block">改造后</div><img src="${t.cover_after}" style="border-radius:0 14px 14px 14px;width:100%;height:300px;object-fit:cover"></div></div>`;
   h += `<div class="card" style="padding:24px;margin-bottom:24px"><h2 style="font-size:18px;margin-bottom:10px">📝 简介</h2><p style="color:#555">${t.summary||'暂无简介'}</p></div>`;
   if ((t.materials||[]).length) {
@@ -274,7 +293,8 @@ async function viewProject(id) {
   if (!imgs.length) imgs.push(`https://picsum.photos/seed/p${p.id}/800`);
   let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/projects">作品</a> / <span>${p.title||'作品详情'}</span></div>`;
   h += `<h1 style="font-size:28px;margin-bottom:12px">${p.title||'未命名作品'}</h1>`;
-  h += `<div class="flex-between" style="margin-bottom:20px"><div class="flex">${avatarFor(user)}<div><div style="font-weight:600">${user.nickname||user.username||'匿名'}</div><div style="font-size:12px;color:#888">${timeAgo(p.created_at)} · 👍 ${p.like_count} 💬 ${p.comment_count} ${stars(p.rating)}</div></div></div><div class="flex"><button class="btn btn-outline" onclick="likeProject(${p.id},this)">👍 点赞</button><a class="btn btn-solid" href="#/tutorials/${tut.id}">📖 查看原教程</a></div></div>`;
+  const isOwnProject = state.user && state.user.id === user.id;
+  h += `<div class="flex-between" style="margin-bottom:20px"><div class="flex">${avatarFor(user)}<div><div style="font-weight:600">${user.nickname||user.username||'匿名'}</div><div style="font-size:12px;color:#888">${timeAgo(p.created_at)} · 👍 ${p.like_count} 💬 ${p.comment_count} ${stars(p.rating)}</div></div></div><div class="flex">${isOwnProject?'':`<button class="btn btn-outline" onclick="startChat(${user.id||0})">✉️ 私信作者</button>`}<button class="btn btn-outline" onclick="likeProject(${p.id},this)">👍 点赞</button><a class="btn btn-solid" href="#/tutorials/${tut.id}">📖 查看原教程</a></div></div>`;
   if (imgs.length === 1) {
     h += `<img src="${imgs[0]}" style="width:100%;border-radius:14px;margin-bottom:20px;max-height:500px;object-fit:cover">`;
   } else {
@@ -320,12 +340,14 @@ async function viewMe() {
   if (!requireLogin()) return;
   const r = await get('/auth/center');
   if (!r.success) return toast(r.message, 'error');
+  refreshUnread(true);
   const s = r.data;
   const u = state.user;
   let h = `<div class="bread"><a href="#/">首页</a> / 个人中心</div>`;
   h += `<div class="card" style="padding:28px;margin-bottom:24px;display:flex;gap:24px;align-items:center"><div style="width:88px;height:88px;border-radius:50%;background:linear-gradient(135deg,#7c5cff,#3bc9db);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:32px">${(u.nickname||u.username).charAt(0).toUpperCase()}</div><div style="flex:1"><h1 style="font-size:24px;margin-bottom:6px">${u.nickname||u.username} <span style="font-size:13px;color:#7c5cff;background:#f8f5ff;padding:3px 10px;border-radius:999px;">[${levelLabel(s.level)}]</span></h1><div style="color:#888">@${u.username} · ${u.email}</div>${u.specialty?`<div style="margin-top:8px;color:#555">🔧 ${u.specialty}</div>`:''}${u.bio?`<div style="margin-top:6px;color:#555">${u.bio}</div>`:''}</div><div style="text-align:right"><button class="btn btn-outline" onclick="editProfile()">编辑资料</button></div></div>`;
   h += `<div class="grid grid-4" style="margin-bottom:24px"><div class="stat-card"><div class="stat-num">${s.tutorial_count||0}</div><div class="stat-label">发布教程</div></div><div class="stat-card"><div class="stat-num">${s.project_count||0}</div><div class="stat-label">改造作品</div></div><div class="stat-card"><div class="stat-num">${s.favorite_count||0}</div><div class="stat-label">我的收藏</div></div><div class="stat-card"><div class="stat-num">${s.total_items||0}</div><div class="stat-label">累计改造 (件)</div></div><div class="stat-card"><div class="stat-num">${s.attempt_count||0}</div><div class="stat-label">尝试中 (${s.completed_count||0}完成)</div></div><div class="stat-card"><div class="stat-num">${s.score||0}</div><div class="stat-label">总积分</div></div></div>`;
-  h += `<div class="tabs"><div class="tab tab-active">📚 我的教程</div><div class="tab" onclick="location.hash='#/me/projects'">🎨 我的作品</div><div class="tab" onclick="location.hash='#/me/favorites'">⭐ 我的收藏</div><div class="tab" onclick="location.hash='#/me/attempts'">🛠 我的尝试</div><div class="tab" onclick="location.hash='#/me/messages'">✉️ 消息</div></div>`;
+  const msgBadge = state.unread > 0 ? `<span class="nav-badge">${state.unread > 99 ? '99+' : state.unread}</span>` : '';
+  h += `<div class="tabs"><div class="tab tab-active">📚 我的教程</div><div class="tab" onclick="location.hash='#/me/projects'">🎨 我的作品</div><div class="tab" onclick="location.hash='#/me/favorites'">⭐ 我的收藏</div><div class="tab" onclick="location.hash='#/me/attempts'">🛠 我的尝试</div><div class="tab" onclick="location.hash='#/me/messages'">✉️ 消息${msgBadge}</div></div>`;
   const tuts = await get('/tutorials?user_id=' + u.id + '&size=20');
   if (tuts.data && tuts.data.list && tuts.data.list.length) {
     h += `<div class="grid grid-4">${renderTutorialCards(tuts.data.list)}</div>`;
@@ -401,11 +423,149 @@ async function saveTutorial(publish) {
   toast(publish ? '发布成功！🎉' : '草稿已保存', 'success');
   location.hash = '#/tutorials/' + r.data.id;
 }
-async function viewMessages() {
+// ---- 消息中心 ----
+let msgTimer = null;
+function stopMsgPolling() { if (msgTimer) { clearInterval(msgTimer); msgTimer = null; } }
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function summarize(s) {
+  s = String(s || '').replace(/\s+/g, ' ').trim();
+  return s.length > 40 ? s.slice(0, 40) + '…' : s;
+}
+function startChat(id) {
   if (!requireLogin()) return;
-  let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/me">个人中心</a> / 消息</div><h1 style="font-size:26px;margin-bottom:18px">✉️ 私信</h1>`;
-  h += `<div class="empty">此功能测试中 · 敬请期待</div>`;
+  if (!id) { toast('无法获取用户信息', 'error'); return; }
+  location.hash = '#/me/messages/' + id;
+}
+async function viewMessages(otherId) {
+  if (!requireLogin()) return;
+  stopMsgPolling();
+  if (otherId) viewChat(otherId);
+  else viewConversationList();
+}
+async function viewConversationList() {
+  const r = await get('/me/messages/conversations');
+  if (!r.success) { $('#app').innerHTML = `<div class="empty">${r.message}</div>`; return; }
+  const list = r.data || [];
+  let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/me">个人中心</a> / 消息</div>`;
+  h += `<h1 style="font-size:26px;margin-bottom:18px">✉️ 私信</h1>`;
+  if (!list.length) {
+    h += `<div class="empty"><div class="empty-icon">📭</div>还没有私信对话<div style="font-size:13px;margin-top:8px">去教程或作品页，点“私信”和创作者聊聊吧~</div></div>`;
+  } else {
+    h += `<div class="conv-list">${list.map(c => {
+      const u = c.user || { id: c.other_id };
+      const name = u.nickname || u.username || '已注销用户';
+      const mine = state.user && c.last_sender_id === state.user.id;
+      const unread = c.unread > 0 ? `<span class="conv-unread">${c.unread > 99 ? '99+' : c.unread}</span>` : '';
+      return `<a class="conv-item" href="#/me/messages/${c.other_id}">
+        <div class="conv-avatar">${avatarFor(u.id ? u : null)}</div>
+        <div class="conv-main">
+          <div class="conv-top"><span class="conv-name">${escapeHtml(name)}</span><span class="conv-time">${timeAgo(c.last_at)}</span></div>
+          <div class="conv-bottom"><span class="conv-preview ${c.unread ? 'conv-preview-unread' : ''}">${mine ? '我：' : ''}${escapeHtml(summarize(c.last_content))}</span>${unread}</div>
+        </div>
+      </a>`;
+    }).join('')}</div>`;
+  }
   $('#app').innerHTML = h;
+  refreshUnread(true);
+  // 定期刷新，新到达的消息会更新未读数和排序
+  msgTimer = setInterval(async () => {
+    if (location.hash.split('?')[0] !== '#/me/messages') { stopMsgPolling(); return; }
+    const rr = await get('/me/messages/conversations');
+    if (rr.success && !$('#chatInput')) viewConversationList();
+  }, 15000);
+}
+function chatDay(t) {
+  if (!t) return '';
+  const d = new Date(t);
+  if (isNaN(d)) return '';
+  const today = new Date();
+  const yest = new Date(Date.now() - 86400000);
+  const fmt = x => `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;
+  if (fmt(d) === fmt(today)) return '今天';
+  if (fmt(d) === fmt(yest)) return '昨天';
+  return fmt(d);
+}
+function renderChat(otherId, other, messages, sending, opts = {}) {
+  const u = other || { id: otherId };
+  const name = u.nickname || u.username || '用户' + otherId;
+  const list = messages || [];
+  const prevInput = $('#chatInput');
+  const draft = opts.preserveDraft && prevInput ? prevInput.value : '';
+  const wasFocused = opts.preserveDraft && document.activeElement === prevInput;
+  let h = `<div class="bread"><a href="#/">首页</a> / <a href="#/me">个人中心</a> / <a href="#/me/messages">消息</a> / <span>${escapeHtml(name)}</span></div>`;
+  h += `<div class="chat">
+    <div class="chat-header">
+      <a href="#/me/messages" class="chat-back">‹</a>
+      <div class="flex">${avatarFor(u)}<div><div style="font-weight:600">${escapeHtml(name)} ${u.level ? `<span style="color:#7c5cff;font-size:12px">[${levelLabel(u.level)}]</span>` : ''}</div>${u.specialty ? `<div style="font-size:12px;color:#888">🔧 ${escapeHtml(u.specialty)}</div>` : ''}</div></div>
+    </div>
+    <div class="chat-body" id="chatBody">`;
+  if (!list.length) {
+    h += `<div class="chat-no-history">还没有聊过天，打个招呼吧 👋</div>`;
+  } else {
+    let lastDay = '';
+    list.forEach(m => {
+      const day = chatDay(m.created_at);
+      if (day && day !== lastDay) { h += `<div class="chat-day">${day}</div>`; lastDay = day; }
+      const mine = m.sender_id === state.user.id;
+      h += `<div class="bubble-row ${mine ? 'bubble-mine' : ''}">
+        <div class="bubble-time">${(m.created_at || '').replace('T', ' ').slice(11, 16)}</div>
+        <div class="bubble">${escapeHtml(m.content)}</div>
+      </div>`;
+    });
+  }
+  h += `</div>
+    <div class="chat-input-bar">
+      <textarea class="input" id="chatInput" placeholder="输入消息，Enter 发送，Shift+Enter 换行..." rows="1"></textarea>
+      <button class="btn btn-solid" id="chatSend" ${sending ? 'disabled' : ''}>${sending ? '发送中' : '发送'}</button>
+    </div>
+  </div>`;
+  $('#app').innerHTML = h;
+  const body = $('#chatBody');
+  if (opts.scrollBottom) body.scrollTop = body.scrollHeight;
+  const input = $('#chatInput');
+  if (draft) {
+    input.value = draft;
+    if (wasFocused) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  }
+  const doSend = async () => {
+    const content = input.value.trim();
+    if (!content) return;
+    $('#chatSend').disabled = true;
+    const r = await post('/me/messages', { receiver_id: Number(otherId), content });
+    if (!r.success) { toast(r.message, 'error'); $('#chatSend').disabled = false; return; }
+    await loadChat(otherId, other, false, true);
+  };
+  $('#chatSend').onclick = doSend;
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
+  });
+  if (!opts.preserveDraft) input.focus();
+}
+async function loadChat(otherId, other, preserveDraft, scrollBottom) {
+  const tasks = [get('/me/messages/' + otherId)];
+  if (!other) tasks.push(get('/users/' + otherId, false));
+  const [mr, ur] = await Promise.all(tasks);
+  if (!mr.success) { $('#app').innerHTML = `<div class="empty">${mr.message}</div>`; return null; }
+  if (!other) other = ur && ur.success ? ur.data : null;
+  renderChat(otherId, other, mr.data || [], false, { preserveDraft, scrollBottom: scrollBottom !== false });
+  return other;
+}
+async function viewChat(otherId) {
+  const other = await loadChat(otherId, null, false, true);
+  // 轮询拉取对方新消息（查看期间到达的消息会被标记已读）
+  msgTimer = setInterval(async () => {
+    if (!location.hash.startsWith('#/me/messages/')) { stopMsgPolling(); return; }
+    const mr = await get('/me/messages/' + otherId);
+    if (!mr.success) return;
+    const body = $('#chatBody');
+    const nearBottom = body && (body.scrollHeight - body.scrollTop - body.clientHeight < 80);
+    renderChat(otherId, other, mr.data || [], false, { preserveDraft: true, scrollBottom: nearBottom });
+  }, 8000);
 }
 async function viewFavorites() {
   if (!requireLogin()) return;
@@ -445,6 +605,7 @@ async function viewRandom() {
   $('#app').innerHTML = h;
 }
 async function route() {
+  stopMsgPolling();
   const hash = location.hash.slice(1) || '/';
   const [path, query] = hash.split('?');
   state.page = 1;
@@ -484,7 +645,7 @@ async function route() {
         if (sub === 'projects') viewProjects();
         else if (sub === 'favorites') viewFavorites();
         else if (sub === 'attempts') viewAttempts();
-        else if (sub === 'messages') viewMessages();
+        else if (sub === 'messages') viewMessages(parts[2]);
         else viewMe();
         break;
       }
@@ -521,6 +682,7 @@ async function submitProject() {
 window.addEventListener('hashchange', route);
 window.addEventListener('DOMContentLoaded', async () => {
   await ensureUser();
+  if (state.user) startUnreadPolling();
   if (!location.hash) location.hash = '#/';
   route();
 });

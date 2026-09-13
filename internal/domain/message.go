@@ -15,3 +15,13 @@ type Message struct {
 func (m *Message) TableName() string {
 	return "messages"
 }
+
+// Conversation 会话列表项，由 messages 表聚合查询得到（非独立数据表）
+type Conversation struct {
+	OtherID      uint64    `gorm:"column:other_id" json:"other_id"`
+	LastSenderID uint64    `gorm:"column:last_sender_id" json:"last_sender_id"`
+	LastContent  string    `gorm:"column:last_content" json:"last_content"`
+	LastAt       time.Time `gorm:"column:last_at" json:"last_at"`
+	Unread       int64     `gorm:"column:unread" json:"unread"`
+	User         *User     `gorm:"-" json:"user"`
+}

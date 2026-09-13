@@ -39,6 +39,21 @@ func (r *UserRepo) GetByID(id uint64) (*domain.User, error) {
 	return u, nil
 }
 
+func (r *UserRepo) GetByIDs(ids []uint64) (map[uint64]*domain.User, error) {
+	result := make(map[uint64]*domain.User)
+	if len(ids) == 0 {
+		return result, nil
+	}
+	var list []*domain.User
+	if err := r.db.Where("id IN ?", ids).Find(&list).Error; err != nil {
+		return nil, apperr.Wrap(apperr.CodeDB, "批量查询用户失败", err)
+	}
+	for _, u := range list {
+		result[u.ID] = u
+	}
+	return result, nil
+}
+
 func (r *UserRepo) GetByEmail(email string) (*domain.User, error) {
 	u := &domain.User{}
 	err := r.db.Where("email = ?", email).First(u).Error

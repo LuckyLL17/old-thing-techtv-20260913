@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"time"
 	"upcycle-hub/internal/domain"
 
 	"gorm.io/gorm"
@@ -66,20 +67,42 @@ func (r *MessageRepo) Send(m *domain.Message) error {
 }
 
 func (r *MessageRepo) List(userID, otherID uint64, page, size int) ([]*domain.Message, error) {
-	var list []*domain.Message
+	list := make([]*domain.Message, 0)
 	q := r.db.Where("(sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)",
 		userID, otherID, otherID, userID)
 	if size > 0 {
 		q = q.Offset((page - 1) * size).Limit(size)
 	}
-	err := q.Order("id DESC").Find(&list).Error
+	err := q.Order("id ASC").Find(&list).Error
+	return list, err
+}
+
+// ListConversations 返回与 userID 有过私信往来的会话，按最后一条消息时间倒序
+func (r *MessageRepo) ListConversations(userID uint64) ([]*domain.Conversation, error) {
+	list := make([]*domain.Conversation, 0)
+	err := r.db.Raw(`
+SELECT m.other_id, m.sender_id AS last_sender_id, m.content AS last_content, m.created_at AS last_at, COALESCE(unread, 0) AS unread
+FROM (
+  SELECT sender_id, CASE WHEN sender_id = ? THEN receiver_id ELSE sender_id END AS other_id, id, content, created_at
+  FROM messages WHERE sender_id = ? OR receiver_id = ?
+) m
+JOIN (SELECT MAX(id) AS max_id FROM messages WHERE sender_id = ? OR receiver_id = ? GROUP BY CASE WHEN sender_id = ? THEN receiver_id ELSE sender_id END) latest
+  ON m.id = latest.max_id
+LEFT JOIN (
+  SELECT sender_id, COUNT(*) AS unread FROM messages
+  WHERE receiver_id = ? AND is_read = 0 GROUP BY sender_id
+) u ON u.sender_id = m.other_id
+ORDER BY m.id DESC`,
+		userID, userID, userID, userID, userID, userID, userID).
+		Scan(&list).Error
 	return list, err
 }
 
 func (r *MessageRepo) MarkRead(userID, otherID uint64) error {
+	now := time.Now()
 	return r.db.Model(&domain.Message{}).
 		Where("sender_id = ? AND receiver_id = ? AND is_read = ?", otherID, userID, false).
-		Updates(map[string]interface{}{"is_read": true}).Error
+		Updates(map[string]interface{}{"is_read": true, "read_at": now}).Error
 }
 
 func (r *MessageRepo) UnreadCount(userID uint64) (int64, error) {

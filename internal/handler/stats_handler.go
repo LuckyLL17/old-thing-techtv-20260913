@@ -119,6 +119,31 @@ func (h *StatsHandler) FollowInfo(c *gin.Context) {
 	OK(c, gin.H{"followers": followers, "following": following, "is_following": isFollowing})
 }
 
+func (h *StatsHandler) UserProfile(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		Fail(c, apperr.ErrBadRequest)
+		return
+	}
+	u, err := h.interactSvc.GetUserProfile(id)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, gin.H{
+		"id":             u.ID,
+		"username":       u.Username,
+		"nickname":       u.Nickname,
+		"avatar":         u.Avatar,
+		"specialty":      u.Specialty,
+		"bio":            u.Bio,
+		"level":          u.Level,
+		"tutorial_count": u.TutorialCount,
+		"project_count":  u.ProjectCount,
+		"score":          u.Score,
+	})
+}
+
 func (h *StatsHandler) SendMessage(c *gin.Context) {
 	uid := middleware.MustLogin(c)
 	if uid == 0 {
@@ -130,11 +155,26 @@ func (h *StatsHandler) SendMessage(c *gin.Context) {
 		Fail(c, apperr.Wrap(apperr.CodeValidation, "参数错误", err))
 		return
 	}
-	if err := h.interactSvc.SendMessage(uid, req.ReceiverID, req.Content); err != nil {
+	m, err := h.interactSvc.SendMessage(uid, req.ReceiverID, req.Content)
+	if err != nil {
 		Fail(c, err)
 		return
 	}
-	OK(c, gin.H{"sent": true})
+	OK(c, m)
+}
+
+func (h *StatsHandler) Conversations(c *gin.Context) {
+	uid := middleware.MustLogin(c)
+	if uid == 0 {
+		Fail(c, apperr.ErrUnauthorized)
+		return
+	}
+	list, err := h.interactSvc.ListConversations(uid)
+	if err != nil {
+		Fail(c, err)
+		return
+	}
+	OK(c, list)
 }
 
 func (h *StatsHandler) Messages(c *gin.Context) {
@@ -148,8 +188,7 @@ func (h *StatsHandler) Messages(c *gin.Context) {
 		Fail(c, apperr.ErrBadRequest)
 		return
 	}
-	p := getPage(c)
-	list, err := h.interactSvc.ListMessages(uid, other, p.Page, p.Size)
+	list, err := h.interactSvc.ListMessages(uid, other)
 	if err != nil {
 		Fail(c, err)
 		return
